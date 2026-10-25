@@ -18,8 +18,19 @@ jobs:
           java-version: '25'
       - name: Install API 37
         run: |
-          echo y | sdkmanager --licenses >/dev/null || true
-          sdkmanager 'platforms;android-37' 'build-tools;37.0.0'
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          SDK_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMGR="$(find "$SDK_HOME" -name sdkmanager -type f -print -quit)"
+          if [ -z "$SDKMGR" ]; then
+            echo "Android SDK manager not bundled: installing cmdline-tools"
+            mkdir -p "$SDK_HOME/cmdline-tools"
+            curl -fsSL 'https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip' -o /tmp/tools.zip
+            unzip -q /tmp/tools.zip -d /tmp/android-tools
+            mv /tmp/android-tools/cmdline-tools "$SDK_HOME/cmdline-tools/latest"
+            SDKMGR="$SDK_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          yes | "$SDKMGR" --licenses >/dev/null || true
+          "$SDKMGR" 'platforms;android-37' 'build-tools;37.0.0'
       - name: Build signed debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
       - name: Upload installable APK
