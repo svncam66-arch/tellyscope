@@ -890,8 +890,9 @@ class TellyscopeViewModel(
             for (pkg in packages) {
                 // A serious refusal stops the batch; never silently skip and continue.
                 val app = _state.value.device.apps.firstOrNull { it.packageName == pkg }
-                PackageActionPolicy.refusal(app, Action.Disable)?.let { reason ->
-                    _notice.value = reason
+                val refusal = PackageActionPolicy.refusal(app, Action.Disable)
+                if (refusal != null) {
+                    _notice.value = refusal
                     break
                 }
                 try {
