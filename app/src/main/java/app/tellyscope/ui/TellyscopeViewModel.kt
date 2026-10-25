@@ -38,6 +38,7 @@ import app.tellyscope.data.TvSettings
 import app.tellyscope.data.TvTweaks
 import app.tellyscope.data.Update
 import app.tellyscope.data.FoldBook
+import app.tellyscope.data.PackageActionPolicy
 import app.tellyscope.data.UpdateCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -527,6 +528,13 @@ class TellyscopeViewModel(
 
     private fun run(pkg: String, action: Action, undoing: Long? = null, id: String? = _state.value.selectedId) {
         if (id == null) return
+        val app = _state.value.device.apps.firstOrNull { it.packageName == pkg }
+        PackageActionPolicy.refusal(app, action)?.let { reason ->
+            _notice.value = reason
+            undoing?.let(undoInFlight::remove)
+            updateDevice(id) { it.copy(pending = null) }
+            return
+        }
         updateDevice(id) { it.copy(pending = null, busy = pkg) }
         viewModelScope.launch {
             // The source throws with the user-facing reason when the TV refuses.
@@ -880,13 +888,20 @@ class TellyscopeViewModel(
         viewModelScope.launch {
             var done = 0
             for (pkg in packages) {
+                // A serious refusal stops the batch; never silently skip and continue.
+                val app = _state.value.device.apps.firstOrNull { it.packageName == pkg }
+                PackageActionPolicy.refusal(app, Action.Disable)?.let { reason ->
+                    _notice.value = reason
+                    break
+                }
                 try {
                     source.act(id, Action.Disable, pkg)
                     done++
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    // The TV refused this one or dropped; the count says so.
+                    // Connection loss may leave the outcome unknown: do not retry.
+                    break
                 }
             }
             _notice.value = Copy.disabledSuggested(done, packages.size)
