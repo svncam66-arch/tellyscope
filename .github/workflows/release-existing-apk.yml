@@ -1,0 +1,37 @@
+name: Publish existing Tellyscope RU APK
+on:
+  push:
+    branches: [xiaomi-edition]
+    paths: ['.github/workflows/release-existing-apk.yml']
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified successful APK build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 40212468138 --repo "$GITHUB_REPOSITORY" --name Tellyscope-RU-Xiaomi-APK --dir .
+          ls -lh ./*.apk
+      - name: Create direct GitHub APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          src="$(find . -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$src"
+          cp "$src" Tellyscope-RU-Xiaomi-Edition-0.7.0-ru.1.apk
+          if gh release view v0.7.0-ru.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v0.7.0-ru.1 Tellyscope-RU-Xiaomi-Edition-0.7.0-ru.1.apk --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create v0.7.0-ru.1 Tellyscope-RU-Xiaomi-Edition-0.7.0-ru.1.apk \
+              --repo "$GITHUB_REPOSITORY" \
+              --target xiaomi-edition \
+              --title "Tellyscope RU — Xiaomi Edition 0.7.0-ru.1" \
+              --notes "Тестовая сборка Android APK на основе открытого проекта Tellyscope 0.7.0. Частичная русификация, отдельный идентификатор, тёмно-зелёная и золотая тема. Безопасность системных пакетов зависит от устройства." \
+              --prerelease
+          fi
