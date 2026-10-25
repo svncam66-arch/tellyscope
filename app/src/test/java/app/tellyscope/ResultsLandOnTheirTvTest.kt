@@ -103,7 +103,7 @@ class ResultsLandOnTheirTvTest {
         assertEquals("tv-a", vm.state.value.selectedId)
 
         source.actGate = CompletableDeferred()
-        vm.propose("com.example", Action.Disable)
+        vm.propose("app-on-tv-a", Action.Disable)
         vm.confirm()
         runCurrent()
         vm.select("tv-b")
@@ -121,7 +121,7 @@ class ResultsLandOnTheirTvTest {
     @Test fun snackbarUndoGoesToTheTvItCameFrom() = with(test) {
         vm = TellyscopeViewModel(source, clock = { 0L })
         runCurrent()
-        vm.propose("com.example", Action.Disable)
+        vm.propose("app-on-tv-a", Action.Disable)
         vm.confirm()
         runCurrent()
         val done = vm.done.value!!
@@ -130,7 +130,7 @@ class ResultsLandOnTheirTvTest {
 
         vm.undo(done.entry, done.deviceId)
         runCurrent()
-        assertEquals("tv-a" to "com.example", source.acted.last())
+        assertEquals("tv-a" to "app-on-tv-a", source.acted.last())
         assertNull(vm.state.value.device.busy)
     }
 
