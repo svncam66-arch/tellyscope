@@ -1,0 +1,36 @@
+name: TV Optimizer Pro experimental APK
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'adb/**'
+      - '.github/workflows/tv-optimizer-preview.yml'
+      - 'gradle/**'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: Experimental debug APK (not a stable release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK and run unit tests
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --console=plain
+      - name: Upload experimental APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TV-Optimizer-Pro-EXPERIMENTAL-debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+          if-no-files-found: error
