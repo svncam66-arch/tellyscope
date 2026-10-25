@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
         val welcomed = File(filesDir, "welcomed")
         val showWelcome = scenario == null && !welcomed.exists() && File(filesDir, "devices.tsv").length() == 0L
         setContent {
-            TellyscopeTheme {
+            TellyscopeTheme(dark = true, dynamic = false) {
                 var welcome by rememberSaveable { mutableStateOf(showWelcome) }
                 if (welcome) {
                     val done = { welcomed.createNewFile(); welcome = false }
@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                                     TellyscopeViewModel(
                                         scenario?.let(::FakeDeviceSource) ?: AdbDeviceSource(applicationContext),
                                         AndroidPhoneStorage(applicationContext),
-                                        updates = if (scenario != null) null else updateCheck(),
+                                        updates = null, // Independent RU variant must not self-update from upstream
                                         folds = FoldBook(File(filesDir, "folds.properties")),
                                     )
                                 }

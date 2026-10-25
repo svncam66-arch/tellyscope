@@ -23,20 +23,20 @@ import java.util.Locale
  */
 object Copy {
     fun button(action: Action) = when (action) {
-        Action.Stop -> "Stop"
-        Action.Disable -> "Disable"
-        Action.Enable -> "Turn on"
-        Action.Open -> "Open"
-        Action.Uninstall -> "Uninstall"
+        Action.Stop -> "Остановить"
+        Action.Disable -> "Отключить"
+        Action.Enable -> "Включить"
+        Action.Open -> "Открыть"
+        Action.Uninstall -> "Удалить"
         Action.Change, Action.ClearCaches, Action.Home, Action.HomeBack -> error("$action has its own button")
     }
 
     fun confirm(action: Action) = when (action) {
-        Action.Stop -> "Yes, stop it"
-        Action.Disable -> "Yes, disable it"
-        Action.Enable -> "Yes, turn it on"
-        Action.Open -> "Yes, open it"
-        Action.Uninstall -> "Yes, uninstall it"
+        Action.Stop -> "Да, остановить"
+        Action.Disable -> "Да, отключить"
+        Action.Enable -> "Да, включить"
+        Action.Open -> "Да, открыть"
+        Action.Uninstall -> "Да, удалить"
         Action.Home -> "Yes, switch home screen"
         Action.HomeBack -> "Yes, switch back"
         Action.Change, Action.ClearCaches -> error("$action isn't an app action")
@@ -48,21 +48,21 @@ object Copy {
      */
     fun explain(action: Action, app: String, pkg: String) = "$app ($pkg)".let { who ->
         when (action) {
-            Action.Stop -> "Stops $who until you open it again."
-            Action.Disable -> "Hides $who and stops it running. Nothing is deleted; you can turn it back on here."
-            Action.Enable -> "Turns $who back on."
-            Action.Open -> "Opens $who on the TV."
-            Action.Uninstall -> "Removes $who and everything saved in it. This can't be undone; to get it back, install it again."
+            Action.Stop -> "Остановит $who до следующего запуска."
+            Action.Disable -> "Отключит $who. Ничего не удаляется; приложение можно включить снова."
+            Action.Enable -> "Снова включает $who."
+            Action.Open -> "Откроет $who на телевизоре."
+            Action.Uninstall -> "Удалит $who вместе с данными. Отменить удаление нельзя; понадобится переустановка."
             Action.Change, Action.ClearCaches, Action.Home, Action.HomeBack -> error("$action isn't a one-app action")
         }
     }
 
     fun done(action: Action, app: String) = when (action) {
-        Action.Stop -> "Stopped $app"
-        Action.Disable -> "Disabled $app"
-        Action.Enable -> "Turned on $app"
-        Action.Open -> "Opened $app"
-        Action.Uninstall -> "Uninstalled $app"
+        Action.Stop -> "Остановлено: $app"
+        Action.Disable -> "Отключено: $app"
+        Action.Enable -> "Включено: $app"
+        Action.Open -> "Открыто: $app"
+        Action.Uninstall -> "Удалено: $app"
         // A setting's label is the whole sentence: "Private DNS set to …".
         Action.Change -> app
         Action.ClearCaches -> "Cleared $app"
@@ -71,7 +71,7 @@ object Copy {
     }
 
     /** Said in the confirm before Stop, Disable or Uninstall of an app the TV's list keeps. */
-    const val KEEP_WARNING = "This TV's list says to keep this."
+    const val KEEP_WARNING = "Профиль устройства рекомендует сохранить приложение."
 
     fun homeBack(launcher: String) = "Switch home back to $launcher"
 
@@ -86,7 +86,7 @@ object Copy {
     fun listSource(custom: String?) =
         if (custom == null) "Lists from tellyscope-devices, built from cleanyourtv" else "Lists from ${sourceName(custom)}"
 
-    const val MAKE_HOME = "Set as default launcher"
+    const val MAKE_HOME = "Сделать главным экраном"
 
     /**
      * The home switch touches two apps, so it names both. The old launcher is disabled, not just
@@ -167,23 +167,23 @@ object Copy {
     fun uninstallTitle(app: String) = "Uninstall $app?"
 
     /** The Apps tabs' header over the apps the TV needs, and why they're apart. */
-    const val SYSTEM = "System"
-    const val SYSTEM_WHY = "Needed by the TV · can't be changed"
+    const val SYSTEM = "Системные"
+    const val SYSTEM_WHY = "Нужно устройству · изменения запрещены"
 
     /** Running, with no word from the TV. */
-    const val TV_OFFLINE = "TV offline"
+    const val TV_OFFLINE = "Устройство не в сети"
     const val RUNNING_OFFLINE = "Running apps show here once the TV is connected."
 
     const val ANDROID_SYSTEM = AppNames.SYSTEM
 
     /** The word next to the status dot, so the state never rests on colour alone. */
     fun state(s: DeviceState) = when (s) {
-        DeviceState.Online -> "Connected"
-        DeviceState.Offline -> "Offline"
-        DeviceState.NotAllowed -> "Not allowed"
-        DeviceState.Waiting -> "Connecting"
-        DeviceState.NeedsPairing -> "Needs the pairing code"
-        DeviceState.Found -> "Not connected"
+        DeviceState.Online -> "Подключено"
+        DeviceState.Offline -> "Не в сети"
+        DeviceState.NotAllowed -> "Доступ запрещён"
+        DeviceState.Waiting -> "Подключение"
+        DeviceState.NeedsPairing -> "Требуется код сопряжения"
+        DeviceState.Found -> "Не подключено"
     }
 
     /** Under 10 GB a whole number hides too much: a 1.5 GB TV isn't a 2 GB one. */
@@ -339,7 +339,7 @@ object Copy {
         if (minutes < 3) "Tellyscope reconnects on its own when the TV is back, usually within a couple of minutes."
         else "Taking a while. Some TVs turn network debugging off when they restart. If it doesn't come back, turn it on again in the TV's Developer options."
 
-    const val TWEAKS = "TV tweaks"
+    const val TWEAKS = "Оптимизация"
     const val DNS_TITLE = "Block ads with Private DNS"
     fun dnsState(host: String?) = host?.let { "On: $it" } ?: "Off. Turn on to block ads and trackers in every app on the TV."
     const val DNS_TOO_OLD = "Needs Android 9 or newer. This TV is older."
@@ -349,13 +349,13 @@ object Copy {
     const val DNS_FIELD = "DNS provider"
     const val DNS_BAD = "Enter a hostname like dns.adguard-dns.com. An IP address won't work here."
     const val DNS_CONFIRM = "Turn on"
-    const val ANIMATIONS_TITLE = "Faster animations"
+    const val ANIMATIONS_TITLE = "Ускорить анимацию"
     fun animationsState(scale: String?) =
         if (scale == TvSettings.FAST) "On: menus move at twice the speed"
         else "Off. Turn on to make menus feel snappier."
-    const val CACHES_TITLE = "Clear all app caches"
+    const val CACHES_TITLE = "Очистить кэш приложений"
     const val CACHES_TEXT = "Frees space by clearing every app's temporary files. App data and sign-ins stay."
-    const val CACHES_BUTTON = "Clear caches"
+    const val CACHES_BUTTON = "Очистить кэш"
     fun cachesCleared(freedKb: Long?) =
         if (freedKb == null || freedKb <= 0) "Cleared app caches" else "Cleared app caches, freed ${bytes(freedKb * 1024)}"
     const val SCREENSHOT_TITLE = "Screenshot"

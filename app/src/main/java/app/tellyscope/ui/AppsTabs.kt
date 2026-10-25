@@ -22,7 +22,7 @@ import app.tellyscope.data.AppInfo
 import app.tellyscope.data.Proc
 
 /** The Apps tab's own tabs: what's running now, what the user installed, and what came with the TV. */
-enum class AppsTab(val label: String) { Running("Running"), Installed("Installed"), BuiltIn("Built-in") }
+enum class AppsTab(val label: String) { Running("Активные"), Installed("Установленные"), BuiltIn("Системные") }
 
 /** One Apps tab's list: the apps the user can change, then the [system] ones they can't, under their own header. */
 data class AppsSplit(val apps: List<AppInfo>, val system: List<AppInfo>)

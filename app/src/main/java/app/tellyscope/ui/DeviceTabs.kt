@@ -102,7 +102,7 @@ import app.tellyscope.data.Snapshot
 import app.tellyscope.data.Suggestions
 
 /** The TV page's destinations, one job each, in the bottom bar. */
-enum class TvTab(val label: String) { Overview("Overview"), Apps("Apps"), Files("Files"), Tweaks("Tweaks") }
+enum class TvTab(val label: String) { Overview("Главная"), Apps("Приложения"), Files("Файлы"), Tweaks("Оптимизация") }
 
 private object TabIcons {
     val Apps = icon(

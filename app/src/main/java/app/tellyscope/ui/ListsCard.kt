@@ -128,7 +128,7 @@ fun DebloatScreen(
         showing != null -> showing.groups
         lists is Suggestions.NoList -> listOf(
             SuggestedGroup(
-                "Apps on this TV",
+                "Приложения на устройстве",
                 tvApps.filter { it.enabled && it.protectedReason == null }.sortedBy { it.label.lowercase() }
                     .map { Suggested(it.packageName, it.label, note = null, optional = false, ticked = false) },
             ),
@@ -149,9 +149,9 @@ fun DebloatScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text(if (searching) "Which TV is this?" else "Debloat") },
+                title = { Text(if (searching) "Какой у вас телевизор?" else "Безопасная оптимизация") },
                 navigationIcon = {
-                    IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
                 },
             )
         },
@@ -160,13 +160,13 @@ fun DebloatScreen(
             Surface(tonalElevation = 3.dp, modifier = Modifier.imePadding()) {
                 Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
                     if (searching) {
-                        Button(onClick = use, enabled = marked != null, modifier = Modifier.fillMaxWidth()) { Text("Use this list") }
+                        Button(onClick = use, enabled = marked != null, modifier = Modifier.fillMaxWidth()) { Text("Использовать профиль") }
                     } else {
                         Button(
                             onClick = { confirming = true },
                             enabled = groups != null && ticked.isNotEmpty() && !busy,
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Disable ${ticked.size} ${if (ticked.size == 1) "app" else "apps"}") }
+                        ) { Text("Проверить и отключить: ${ticked.size}") }
                     }
                 }
             }

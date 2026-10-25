@@ -876,20 +876,29 @@ class TellyscopeViewModel(
     /** Disables the ticked suggestions one by one, each recorded in History with its own undo. */
     fun disableSuggested(packages: List<String>) {
         val id = _state.value.selectedId ?: return
+        val requested = packages.distinct()
+        if (requested.isEmpty() || _state.value.device.busy != null) return
+        val cached = _state.value.device.apps.associateBy { it.packageName }
+        if (!requested.all { p -> cached[p]?.let { it.enabled && it.protectedReason == null && !it.listKeep } == true }) {
+            _notice.value = "Отключение отменено: обнаружен защищённый или неизвестный пакет"
+            return
+        }
         _state.update { it.copy(device = it.device.copy(busy = DISABLING)) }
         viewModelScope.launch {
             var done = 0
-            for (pkg in packages) {
+            for (pkg in requested) {
                 try {
+                    val live = source.apps(id).firstOrNull { it.packageName == pkg }
+                    if (live == null || !live.enabled || live.protectedReason != null || live.listKeep) continue
                     source.act(id, Action.Disable, pkg)
                     done++
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    // The TV refused this one or dropped; the count says so.
+                    // Continue but count only successful changes.
                 }
             }
-            _notice.value = Copy.disabledSuggested(done, packages.size)
+            _notice.value = Copy.disabledSuggested(done, requested.size)
             val apps = runCatching { source.apps(id) }.getOrNull()
             val history = source.history(id)
             updateDevice(id) { it.copy(apps = apps ?: it.apps, busy = null, history = history) }

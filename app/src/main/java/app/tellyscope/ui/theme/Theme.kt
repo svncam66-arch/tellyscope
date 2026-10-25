@@ -24,10 +24,10 @@ import androidx.compose.ui.unit.sp
 private val LightBrand = lightColorScheme(
     primary = Color(0xFF00696B),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF9CF1F2),
+    primaryContainer = Color(0xFFE9E2D3),
     onPrimaryContainer = Color(0xFF002020),
     secondary = Color(0xFF4A6363),
-    secondaryContainer = Color(0xFFCCE8E8),
+    secondaryContainer = Color(0xFFE9E2D3),
     onSecondaryContainer = Color(0xFF051F1F),
     tertiary = Color(0xFF4B607C),
     tertiaryContainer = Color(0xFFD3E4FF),
@@ -40,21 +40,21 @@ private val LightBrand = lightColorScheme(
 )
 
 private val DarkBrand = darkColorScheme(
-    primary = Color(0xFF80D4D5),
-    onPrimary = Color(0xFF003737),
-    primaryContainer = Color(0xFF004F50),
+    primary = Color(0xFFC4A765),
+    onPrimary = Color(0xFF102C26),
+    primaryContainer = Color(0xFF22483C),
     onPrimaryContainer = Color(0xFF9CF1F2),
-    secondary = Color(0xFFB0CCCB),
-    secondaryContainer = Color(0xFF324B4B),
+    secondary = Color(0xFFD4C49C),
+    secondaryContainer = Color(0xFF22483C),
     onSecondaryContainer = Color(0xFFCCE8E8),
-    tertiary = Color(0xFFB3C8E8),
-    tertiaryContainer = Color(0xFF334863),
+    tertiary = Color(0xFFD7C78B),
+    tertiaryContainer = Color(0xFF244435),
     error = Color(0xFFFFB4AB),
-    background = Color(0xFF0E1415),
+    background = Color(0xFF102C26),
     surface = Color(0xFF0E1415),
-    surfaceContainerLow = Color(0xFF161D1D),
-    surfaceContainer = Color(0xFF1A2121),
-    surfaceContainerHigh = Color(0xFF252B2B),
+    surfaceContainerLow = Color(0xFF15342B),
+    surfaceContainer = Color(0xFF1C3A30),
+    surfaceContainerHigh = Color(0xFF27473B),
 )
 
 /** Numbers come first: the app font with tabular figures, so values line up and don't jitter as they update. */
