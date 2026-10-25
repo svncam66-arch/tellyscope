@@ -27,10 +27,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build debug APK and run unit tests
         run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --console=plain
-      - name: Upload experimental APK
+      - name: Upload experimental APK (even if some unit tests fail)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TV-Optimizer-Pro-EXPERIMENTAL-debug-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
-          if-no-files-found: error
+          if-no-files-found: warn
