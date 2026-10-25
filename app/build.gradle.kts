@@ -15,14 +15,14 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "app.tellyscope"
+        applicationId = "app.tvoptimizer.pro"
         // 26 (Android 8.0): java.time and adaptive icons without desugaring, ~97% of
         // phones in use. Kadb needs 23; the TV side has its own floor (wireless debugging is 11+).
-        minSdk = 26
+        minSdk = 31
         targetSdk = 37
         // A PR into main must raise both past the latest v* tag (.github/workflows/release-check.yml).
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 13
+        versionName = "0.8.0"
 
         // An alpha tag (release.yml, vX.Y.Z-alpha.N on dev) passes -Ptellyscope.alpha=N:
         // a separate app ID, so it installs next to the release.
@@ -48,6 +48,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Never confuse a pre-release debug build with the first stable application.
+            applicationIdSuffix = ".experimental"
+            versionNameSuffix = "-EXPERIMENTAL"
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
