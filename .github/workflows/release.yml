@@ -53,7 +53,9 @@ jobs:
   alpha:
     needs: alpha-gate
     # always(): a tag push skips the gate, and a skipped need would skip this job too.
-    if: always() && (github.ref_type == 'tag' || needs.alpha-gate.outputs.publish == 'true')
+    # TV Optimizer Pro uses the separate experimental artifact workflow.
+    # No legacy alpha publication until its signing/release policy is reviewed.
+    if: false
     runs-on: ubuntu-latest
     # Its own key, in its own Environment: an alpha can never update a prod install, and a dev
     # push never sees the prod key.
@@ -151,7 +153,10 @@ jobs:
   # Prod: a merge into main tags vX.Y.Z from versionName and publishes the
   # signed APK. release-check.yml has already made sure the version is new.
   prod:
-    if: github.ref == 'refs/heads/main'
+    # Stable TV Optimizer Pro releases require the full acceptance matrix and
+    # a manual signing key controlled locally by the owner (questions 26/43/49).
+    # Disable the inherited automatic Tellyscope production publisher.
+    if: false
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 30
