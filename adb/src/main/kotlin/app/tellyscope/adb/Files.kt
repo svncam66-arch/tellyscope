@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package app.tellyscope.adb
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okio.Sink
 import okio.Source
 
@@ -81,7 +83,7 @@ class Files(private val session: AdbSession) {
         return name
     }
 
-    private suspend fun verifiedDirectory(folder: TvFolder, parts: List<String>): String {
+    private fun verifiedDirectory(folder: TvFolder, parts: List<String>): String {
         require(parts.size <= 12) { "Превышена допустимая глубина папок." }
         var directory = folder.path
         for (part in parts) {
@@ -96,7 +98,7 @@ class Files(private val session: AdbSession) {
     }
 
     /** Creates one folder; never creates parents or overwrites a file. */
-    suspend fun createDirectory(folder: TvFolder, parts: List<String>, name: String) = runTransfer { _ ->
+    suspend fun createDirectory(folder: TvFolder, parts: List<String>, name: String) = withContext(Dispatchers.IO) {
         val clean = checkedSegment(name)
         val dir = verifiedDirectory(folder, parts)
         require(session.list(dir).none { it.name == clean }) { "Такое имя уже существует." }
@@ -109,7 +111,7 @@ class Files(private val session: AdbSession) {
     }
 
     /** Renames a file or directory in place, never overwriting an existing entry. */
-    suspend fun rename(folder: TvFolder, parts: List<String>, oldName: String, newName: String) = runTransfer { _ ->
+    suspend fun rename(folder: TvFolder, parts: List<String>, oldName: String, newName: String) = withContext(Dispatchers.IO) {
         checkedSegment(oldName)
         val clean = checkedSegment(newName)
         require(oldName != clean) { "Укажите новое имя." }
@@ -127,7 +129,7 @@ class Files(private val session: AdbSession) {
     }
 
     /** Deletes one explicitly selected ordinary file or one EMPTY folder. Never recursive. */
-    suspend fun delete(folder: TvFolder, parts: List<String>, name: String) = runTransfer { _ ->
+    suspend fun delete(folder: TvFolder, parts: List<String>, name: String) = withContext(Dispatchers.IO) {
         val clean = checkedSegment(name)
         val dir = verifiedDirectory(folder, parts)
         val entry = session.list(dir).firstOrNull { it.name == clean }
