@@ -41,6 +41,8 @@ import app.tellyscope.data.TvTweaks
 import app.tellyscope.data.Update
 import app.tellyscope.data.FoldBook
 import app.tellyscope.data.PackageActionPolicy
+import app.tellyscope.data.PerformanceLab
+import app.tellyscope.data.PerformanceRun
 import app.tellyscope.data.UpdateCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +51,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -83,6 +88,9 @@ data class ScanUi(
 data class DeviceUi(
     val snapshot: Snapshot? = null,
     val capabilities: DeviceCapabilities? = null,
+    val labBefore: PerformanceRun? = null,
+    val labAfter: PerformanceRun? = null,
+    val labBusy: Boolean = false,
     val apps: List<AppInfo> = emptyList(),
     val network: NetworkInfo? = null,
     val history: List<HistoryEntry> = emptyList(),
@@ -211,6 +219,7 @@ class TellyscopeViewModel(
     private var pendingBackupPreview: EncryptedLocalBackup.Preview? = null
     private var liveJob: Job? = null
     private var mediumJob: Job? = null
+    private var labJob: Job? = null
     private var probeJob: Job? = null
     private var listsJob: Job? = null
     private var requestJob: Job? = null
@@ -351,9 +360,51 @@ class TellyscopeViewModel(
     /** The TV on screen refreshes at the open screen's rates; the others at the slowest. */
     fun showStats(profile: StatsProfile) = source.showStats(_state.value.selectedId, profile)
 
+    /**
+     * Repeat actual ADB observations six times. Do not create a fake benchmark or
+     * claim a faster TV based on CPU idling; show only descriptive before/after deltas.
+     */
+    fun measurePerformance(before: Boolean) {
+        val device = _state.value.selected ?: return
+        if (device.state != DeviceState.Online || _state.value.device.labBusy) {
+            _notice.value = "Подключите устройство и завершите предыдущие измерения."
+            return
+        }
+        labJob?.cancel()
+        val id = device.id
+        updateDevice(id) { it.copy(labBusy = true) }
+        labJob = viewModelScope.launch {
+            val samples = mutableListOf<Snapshot>()
+            try {
+                withTimeoutOrNull(50_000) {
+                    source.live(id).distinctUntilChangedBy { it.at }.take(6).collect { samples += it }
+                }
+                val result = PerformanceLab.summarize(samples)
+                if (result == null) {
+                    _notice.value = "Недостаточно измерений. Проверьте подключение и повторите попытку."
+                } else {
+                    updateDevice(id) { current ->
+                        if (before) current.copy(labBefore = result, labAfter = null)
+                        else current.copy(labAfter = result)
+                    }
+                    _notice.value = "Собрано реальных измерений: ${result.observations}."
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Не удалось получить реальные показатели через ADB."
+            } finally {
+                updateDevice(id) { it.copy(labBusy = false) }
+            }
+        }
+    }
+
+
+
     fun select(id: String?) {
         liveJob?.cancel()
         mediumJob?.cancel()
+        labJob?.cancel()
         probeJob?.cancel()
         listsJob?.cancel()
         requestJob?.cancel()
