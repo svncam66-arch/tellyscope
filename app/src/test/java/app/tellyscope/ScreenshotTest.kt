@@ -949,13 +949,13 @@ class ScreenshotTest {
         val lists = deviceState().device.lists as Suggestions.Ready
         shot("18_debloat_model", dark) { DebloatScreen(lists, {}, {}, {}, tvMakers = listOf("XGIMI")) }
         compose.onNodeWithText(lists.list.name).assertExists()
-        compose.onNodeWithText("This model's list", substring = true).assertExists()
-        compose.onNodeWithText("These apps will be turned off", substring = true).assertExists()
+        compose.onNodeWithText("Model/Android match", substring = true).assertExists()
+        compose.onNodeWithText("Nothing is selected by default", substring = true).assertExists()
         compose.onNodeWithText("optional: tick it if you don't use it", substring = true).assertExists()
         compose.onNodeWithText("Not this TV?").assertExists()
         compose.onNodeWithText("TCL C-series").assertDoesNotExist()
-        val ticked = lists.groups.flatMap { it.packages }.count { it.ticked }
-        compose.onNodeWithText("Disable $ticked ${if (ticked == 1) "app" else "apps"}").assertIsEnabled()
+        // Suggestions are never selected by default, even when a list marks them ticked.
+        compose.onNodeWithText("Disable 0 apps").assertIsNotEnabled()
     }
 
     /** No list for the model: its maker's lists merged, nothing ticked. */
@@ -1104,16 +1104,13 @@ class ScreenshotTest {
 
     @Test fun readme_debloat() {
         shot("20_readme_debloat") { DebloatScreen(readmeLists(), {}, {}, {}) }
-        compose.onNodeWithText("Disable 4 apps").assertIsEnabled()
+        compose.onNodeWithText("Disable 0 apps").assertIsNotEnabled()
     }
 
     @Test fun readme_confirm() {
-        // Over the review step, as in the app.
-        val confirm = {
-            compose.onNodeWithText("Disable 4 apps").performClick()
-            Unit
-        }
-        shot("21_readme_confirm", screen = true, before = confirm) { DebloatScreen(readmeLists(), {}, {}, {}) }
+        // Demo of the confirmation dialog after explicit selection, never preselected in UI.
+        val manuallySelected = readmeLists().groups.flatMap { it.packages }.filter { it.ticked }
+        shot("21_readme_confirm", screen = true) { DisableDialog(manuallySelected, {}, {}) }
         compose.onNodeWithText("Disable 4 apps?").assertExists()
     }
 
