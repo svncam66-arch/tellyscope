@@ -43,7 +43,7 @@ class Files(private val session: AdbSession) {
         onProgress: (Progress) -> Unit = {},
     ): String {
         // Every entry counts as taken, hidden files and folders too, not just what [list] shows.
-        val dir = verifiedDirectory(folder, subfolders)
+        val dir = runTransfer { _ -> verifiedDirectory(folder, subfolders) }
         val taken = runTransfer { _ -> session.list(dir).map { it.name }.toSet() }
         val target = uniqueName(safeName(name), taken)
         val path = "$dir/$target"
@@ -63,9 +63,13 @@ class Files(private val session: AdbSession) {
     ) {
         checkedSegment(file.name)
         require(!file.isDirectory) { "Папку нельзя скачать как отдельный файл." }
-        val dir = verifiedDirectory(folder, subfolders)
-        val present = session.list(dir).any { it.name == file.name && it.mode and S_IFMT == S_IFREG }
-        require(present) { "Файл недоступен для скачивания." }
+        val dir = runTransfer { _ ->
+            val checked = verifiedDirectory(folder, subfolders)
+            require(session.list(checked).any { it.name == file.name && it.mode and S_IFMT == S_IFREG }) {
+                "Файл недоступен для скачивания."
+            }
+            checked
+        }
         runTransfer { stopped -> session.pull(sink.counting(file.size, stopped, onProgress), "$dir/${file.name}") }
     }
 
