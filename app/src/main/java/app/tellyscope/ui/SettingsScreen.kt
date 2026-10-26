@@ -93,7 +93,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = { Text("Настройки") },
                 navigationIcon = {
-                    IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the TV's page") }
+                    IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Вернуться к устройству") }
                 },
             )
         },
