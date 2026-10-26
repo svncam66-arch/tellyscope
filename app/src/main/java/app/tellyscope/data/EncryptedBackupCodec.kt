@@ -4,7 +4,6 @@ package app.tellyscope.data
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.util.Arrays
 import javax.crypto.Cipher
@@ -54,11 +53,11 @@ object EncryptedBackupCodec {
             "Повреждённая или неполная резервная копия."
         }
         val input = ByteBuffer.wrap(encrypted)
-        val header = ByteArray(MAGIC.size).also(input::get)
+        val header = ByteArray(MAGIC.size).also { input.get(it) }
         require(Arrays.equals(header, MAGIC)) { "Неизвестный формат резервной копии." }
-        val salt = ByteArray(SALT_BYTES).also(input::get)
-        val nonce = ByteArray(NONCE_BYTES).also(input::get)
-        val ciphertext = ByteArray(input.remaining()).also(input::get)
+        val salt = ByteArray(SALT_BYTES).also { input.get(it) }
+        val nonce = ByteArray(NONCE_BYTES).also { input.get(it) }
+        val ciphertext = ByteArray(input.remaining()).also { input.get(it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, deriveKey(passphrase, salt), GCMParameterSpec(TAG_BITS, nonce))
         cipher.updateAAD(header)
