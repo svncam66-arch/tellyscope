@@ -58,6 +58,13 @@ class FakeDeviceSource(
     private val apps = mutableMapOf<String, MutableList<AppInfo>>()
     private val book = HistoryBook()
     private val tvFiles = mutableMapOf<TvFolder, MutableList<TvFile>>()
+    private val simulatedSubfolders = mutableMapOf<String, MutableList<TvFile>>()
+
+    private fun fakeFolder(folder: TvFolder, subfolders: List<String>): MutableList<TvFile> =
+        if (subfolders.isEmpty()) tvFiles.getOrPut(folder) {
+            if (folder == TvFolder.DOWNLOAD) baseFiles.toMutableList() else mutableListOf()
+        } else simulatedSubfolders.getOrPut(folder.name + "/" + subfolders.joinToString("/")) { mutableListOf() }
+
 
     override fun scan(): Flow<ScanEvent> = flow {
         val subnet = "192.168.1.0/24"
@@ -244,9 +251,41 @@ class FakeDeviceSource(
         return InstallResult.Done
     }
 
-    override suspend fun files(deviceId: String, folder: TvFolder): List<TvFile> = tvFiles.getOrPut(folder) {
-        if (folder == TvFolder.DOWNLOAD) baseFiles.toMutableList() else mutableListOf()
-    }.sortedByDescending { it.modifiedMillis }
+    override suspend fun files(deviceId: String, folder: TvFolder): List<TvFile> =
+        fakeFolder(folder, emptyList()).sortedWith(compareByDescending<TvFile> { it.isDirectory }.thenByDescending { it.modifiedMillis })
+
+    override suspend fun browseFiles(deviceId: String, folder: TvFolder, subfolders: List<String>): List<TvFile> =
+        fakeFolder(folder, subfolders).sortedWith(compareByDescending<TvFile> { it.isDirectory }.thenByDescending { it.modifiedMillis })
+
+    override suspend fun createDirectory(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        require(name.isNotBlank() && name !in setOf(".", "..") && '/' !in name && '\\' !in name)
+        val entries = fakeFolder(folder, subfolders)
+        require(entries.none { it.name == name })
+        entries += TvFile(name, 0L, clock(), isDirectory = true)
+    }
+
+    override suspend fun renameFile(deviceId: String, folder: TvFolder, subfolders: List<String>, oldName: String, newName: String) {
+        require(newName.isNotBlank() && '/' !in newName && '\\' !in newName)
+        val entries = fakeFolder(folder, subfolders)
+        require(entries.none { it.name == newName })
+        val index = entries.indexOfFirst { it.name == oldName }
+        require(index >= 0)
+        entries[index] = entries[index].copy(name = newName)
+        if (entries[index].isDirectory) {
+            val prefix = folder.name + "/" + (subfolders + oldName).joinToString("/")
+            val next = folder.name + "/" + (subfolders + newName).joinToString("/")
+            simulatedSubfolders.keys.filter { it == prefix || it.startsWith("$prefix/") }.forEach { key ->
+                simulatedSubfolders[next + key.removePrefix(prefix)] = simulatedSubfolders.remove(key) ?: mutableListOf()
+            }
+        }
+    }
+
+    override suspend fun deleteFile(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        val entries = fakeFolder(folder, subfolders)
+        val found = entries.firstOrNull { it.name == name } ?: error("Файл отсутствует")
+        if (found.isDirectory) require(fakeFolder(folder, subfolders + name).isEmpty())
+        entries.remove(found)
+    }
 
     override suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit): String {
         var done = 0L
