@@ -587,8 +587,8 @@ class TellyscopeViewModel(
             passphrase?.fill('\u0000')
             return
         }
-        val storage = storage
-        if (storage == null || backupDir == null) {
+        val phoneStorage = this.storage
+        if (phoneStorage == null || backupDir == null) {
             passphrase.fill('\u0000')
             _notice.value = "Восстановление недоступно."
             return
@@ -597,7 +597,7 @@ class TellyscopeViewModel(
         _state.update { it.copy(backupEntries = emptySet()) }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val source = storage.open(uri)
+                val source = phoneStorage.open(uri)
                 require(source.size == null || source.size <= 8_000_100L) {
                     "Файл резервной копии слишком велик."
                 }
