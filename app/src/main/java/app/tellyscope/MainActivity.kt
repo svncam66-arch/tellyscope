@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
                                         AndroidPhoneStorage(applicationContext),
                                         updates = if (scenario != null) null else updateCheck(),
                                         folds = FoldBook(File(filesDir, "folds.properties")),
+                                        backupDir = filesDir,
                                     )
                                 }
                             },
@@ -171,6 +172,14 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream"), vm::saveTo)
     val saveScreenshot = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"), vm::screenshotTo)
     val saveDiagnosticReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain"), vm::saveDiagnosticReport)
+    var exportPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val pwd = exportPassphrase
+        exportPassphrase = null
+        vm.exportLocalBackup(uri, pwd)
+    }
 
     state.update?.let { u ->
         UpdateDialog(u, onGet = { vm.updateLater(); runCatching { browser.openUri(u.url) } }, onLater = vm::updateLater, onSkip = vm::skipUpdate)
@@ -227,6 +236,11 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             alphaBuild = state.alphaBuild,
             onCheckUpdates = vm::setCheckUpdates,
             back = { settings = false },
+            onExportBackup = { pwd ->
+                exportPassphrase?.fill('\u0000')
+                exportPassphrase = pwd
+                exportBackup.launch("tv-optimizer-pro.tvopbak")
+            },
             snackbar = snackbar,
         )
     } else if (debloat) {
