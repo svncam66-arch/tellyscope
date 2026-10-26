@@ -113,6 +113,22 @@ interface DeviceSource {
 
     suspend fun pull(deviceId: String, folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit)
 
+    /** Transfer inside a verified visible subfolder; unsupported sources fail closed. */
+    suspend fun pushInto(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit,
+    ): String = if (subfolders.isEmpty()) push(deviceId, folder, name, size, source, onProgress)
+        else throw UnsupportedOperationException("Передача в эту папку не поддерживается.")
+
+    suspend fun pullFrom(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        file: TvFile, sink: Sink, onProgress: (Progress) -> Unit,
+    ) {
+        if (subfolders.isEmpty()) pull(deviceId, folder, file, sink, onProgress)
+        else throw UnsupportedOperationException("Скачивание из этой папки не поддерживается.")
+    }
+
+
     /**
      * What the TV's list from tellyscope-devices suggests turning off. Never throws; offline it
      * uses the cached lists, or answers [Suggestions.Unavailable].
