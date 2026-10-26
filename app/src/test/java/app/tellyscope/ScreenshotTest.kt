@@ -577,23 +577,23 @@ class ScreenshotTest {
         val opened = mutableListOf<String>()
         shot("81_settings") { settings(opened)() }
         // Check for updates leads; Advanced starts folded.
-        compose.onNodeWithText("Check for updates").assertExists()
-        compose.onNodeWithText("Use your own debloat lists").assertDoesNotExist()
-        compose.onNodeWithText("Advanced").performClick()
+        compose.onNodeWithText("Проверять обновления").assertExists()
+        compose.onNodeWithText("Собственные списки оптимизации").assertDoesNotExist()
+        compose.onNodeWithText("Дополнительно").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("cleanyourtv").assertExists()
         compose.onNodeWithText(" 30k+").assertExists()
         compose.onNodeWithText("cleanyourtv").performClick()
-        compose.onNodeWithText("How to use your own lists").performClick()
+        compose.onNodeWithText("Как использовать свои списки").performClick()
         assertEquals(listOf("https://github.com/Gathin23/cleanyourtv", RELEASES.removeSuffix("/releases") + "/blob/main/CONTRIBUTING.md#using-your-own-lists"), opened)
         assertTrue(opened[1].startsWith("https://github.com/") && opened[1].contains("/tellyscope/blob/main/CONTRIBUTING.md"))
         // It opens the existing source dialog, unchanged.
-        compose.onNodeWithText("Use your own debloat lists").assertHasClickAction()
+        compose.onNodeWithText("Собственные списки оптимизации").assertHasClickAction()
     }
 
     @Test fun settings_dark() = shot("81_settings", dark = true) { settings()() }
-    @Test fun settings_advanced() = shot("82_settings_advanced", before = { compose.onNodeWithText("Advanced").performClick(); Unit }) { settings()() }
-    @Test fun settings_advanced_dark() = shot("82_settings_advanced", dark = true, before = { compose.onNodeWithText("Advanced").performClick(); Unit }) { settings()() }
+    @Test fun settings_advanced() = shot("82_settings_advanced", before = { compose.onNodeWithText("Дополнительно").performClick(); Unit }) { settings()() }
+    @Test fun settings_advanced_dark() = shot("82_settings_advanced", dark = true, before = { compose.onNodeWithText("Дополнительно").performClick(); Unit }) { settings()() }
 
     private fun appMenu(dark: Boolean) {
         val open = {
