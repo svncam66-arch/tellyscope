@@ -335,7 +335,7 @@ fun DeviceTabsScreen(
                         val folder = ui.files.folder
                         when {
                             offline -> item { EmptyState(DeviceIcons.Tv, Copy.TV_OFFLINE, "Connect to the TV to see its files.") }
-                            else -> item { FilesBlock(ui.files, state.now, actions) }
+                            else -> item { FilesBlock(ui.files, state.now, actions, deviceId = device.id) }
                         }
                     }
                     TvTab.Tweaks -> {
