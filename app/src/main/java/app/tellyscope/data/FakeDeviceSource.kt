@@ -303,6 +303,32 @@ class FakeDeviceSource(
         return name
     }
 
+    override suspend fun pushInto(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit,
+    ): String {
+        if (subfolders.isEmpty()) return push(deviceId, folder, name, size, source, onProgress)
+        var read = 0L
+        val buf = Buffer()
+        while (true) {
+            val n = source.read(buf, 256L * 1024L)
+            if (n < 0) break
+            buf.clear()
+            read += n
+            onProgress(Progress(read, size))
+        }
+        fakeFolder(folder, subfolders) += TvFile(name, read, clock())
+        return name
+    }
+
+    override suspend fun pullFrom(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        file: TvFile, sink: Sink, onProgress: (Progress) -> Unit,
+    ) {
+        require(fakeFolder(folder, subfolders).any { it.name == file.name && !it.isDirectory })
+        pull(deviceId, folder, file, sink, onProgress)
+    }
+
     override suspend fun pull(deviceId: String, folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit) {
         val chunk = ByteArray(64 * 1024)
         var done = 0L
