@@ -53,8 +53,8 @@ object DiagnosticReport {
             } else {
                 appendLine("Измерения: " + if (current) "последние доступные" else "устаревшие (устройство не в сети)")
                 appendLine("Время измерения: " + time(sample.at))
-                appendLine("Загрузка CPU: ${sample.cpuPercent}%")
-                appendLine("RAM: ${sample.ramUsedMb} / ${sample.ramTotalMb} МБ")
+                appendLine("Загрузка CPU: " + if (sample.cpuAvailable) "${sample.cpuPercent}%" else "нет данных")
+                appendLine("RAM: " + if (sample.ramAvailable) "${sample.ramUsedMb} / ${sample.ramTotalMb} МБ" else "нет данных")
                 appendLine("Накопитель занято: " + gb(sample.storageUsedGb))
                 appendLine("Накопитель всего: " + gb(sample.storageTotalGb))
                 appendLine("Температура: " + (sample.tempC?.let { "$it °C" } ?: "нет данных"))
