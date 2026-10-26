@@ -67,6 +67,7 @@ class FakeShell(
 /** A TV filesystem in a map, plus the install calls it saw. */
 class FakeTransfer : AdbTransfer {
     val files = mutableMapOf<String, ByteArray>()
+    val directories = mutableSetOf<String>()
     val installs = mutableListOf<Pair<List<String>, List<String>>>()
     /** Thrown by install calls, like Kadb does with the TV's "Failure [...]" answer. */
     var installFails: Exception? = null
@@ -102,7 +103,9 @@ class FakeTransfer : AdbTransfer {
 
     override fun list(remoteDir: String): List<RemoteEntry> =
         files.filterKeys { it.substringBeforeLast('/') == remoteDir }
-            .map { (path, bytes) -> RemoteEntry(path.substringAfterLast('/'), 0x81A4, bytes.size.toLong(), 1_700_000_000) }
+            .map { (path, bytes) -> RemoteEntry(path.substringAfterLast('/'), 0x81A4, bytes.size.toLong(), 1_700_000_000) } +
+            directories.filter { it.substringBeforeLast('/') == remoteDir }
+                .map { RemoteEntry(it.substringAfterLast('/'), 0x41ED, 0L, 1_700_000_000) }
 
     private fun drain(source: Source): ByteArray {
         val all = Buffer()
