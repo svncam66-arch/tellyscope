@@ -325,6 +325,24 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     private suspend fun <T> busy(deviceId: String, block: suspend () -> T): T =
         links[deviceId]?.gate?.during(block) ?: block()
 
+    override suspend fun probeCapabilities(deviceId: String): DeviceCapabilities {
+        val shell = session(deviceId)
+        // Constant, read-only ADB property queries; never accept shell text from a profile.
+        suspend fun prop(key: String): String? {
+            val result = shell.shell("getprop $key")
+            return if (result.exitCode == 0) CapabilityProperties.value(result.output) else null
+        }
+        return DeviceCapabilities(
+            manufacturer = prop("ro.product.manufacturer"),
+            model = prop("ro.product.model"),
+            androidVersion = prop("ro.build.version.release"),
+            sdk = CapabilityProperties.sdk(prop("ro.build.version.sdk")),
+            buildId = prop("ro.build.id"),
+            firmwareFingerprint = prop("ro.build.fingerprint"),
+            detectedAt = System.currentTimeMillis(),
+        )
+    }
+
     override suspend fun apps(deviceId: String): List<AppInfo> {
         val shell = session(deviceId)
         val home = Actions(shell).homePackages()
