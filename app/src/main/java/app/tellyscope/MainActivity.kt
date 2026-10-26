@@ -298,6 +298,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
                 folder = vm::folder,
                 enterFolder = vm::enterFolder,
                 parentFolder = vm::parentFolder,
+                pickFileHere = { pickFile.launch(arrayOf("*/*")) },
                 createFolder = vm::createFolder,
                 renameFile = vm::renameFile,
                 deleteFile = vm::deleteFile,
