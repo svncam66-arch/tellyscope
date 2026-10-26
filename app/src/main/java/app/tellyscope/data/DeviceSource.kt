@@ -60,6 +60,13 @@ interface DeviceSource {
     suspend fun network(deviceId: String): NetworkInfo
 
     /**
+     * Collects only read-only device firmware facts. null means not available.
+     * No result from this method constitutes an approved optimization profile.
+     */
+    suspend fun probeCapabilities(deviceId: String): DeviceCapabilities? = null
+
+
+    /**
      * Runs an action and records it. Uninstall runs only on apps the user installed, and has no
      * undo. [undoing] is the history entry this reverses, which gets marked undone.
      */
