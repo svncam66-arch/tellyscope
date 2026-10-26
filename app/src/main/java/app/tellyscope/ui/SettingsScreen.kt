@@ -80,13 +80,58 @@ fun SettingsScreen(
     alphaBuild: Boolean,
     onCheckUpdates: (Boolean) -> Unit,
     back: () -> Unit,
+    onExportBackup: ((CharArray) -> Unit)? = null,
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
+    var backupPasswordDialog by rememberSaveable { mutableStateOf(false) }
+    var backupPassword by remember { mutableStateOf("") }
+    var backupVisible by rememberSaveable { mutableStateOf(false) }
+
     var advanced by rememberSaveable { mutableStateOf(false) }
     val browser = LocalUriHandler.current
     val open = { url: String -> runCatching { browser.openUri(url) }; Unit }
     if (editing) SourceDialog(listSource, onSave = { editing = false; onListSource(it) }, onDismiss = { editing = false })
+    if (backupPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { backupPassword = ""; backupPasswordDialog = false },
+            title = { Text("Зашифрованная резервная копия") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Сохраняются локальные сведения об устройствах, история и настройки. Ключи ADB в копию не включаются.")
+                    Text("Придумайте отдельный пароль длиной не менее 12 символов и храните его надёжно.")
+                    OutlinedTextField(
+                        value = backupPassword,
+                        onValueChange = { backupPassword = it },
+                        label = { Text("Пароль копии") },
+                        visualTransformation = if (backupVisible) androidx.compose.ui.text.input.VisualTransformation.None
+                            else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = backupVisible, onCheckedChange = { backupVisible = it })
+                        Text("Показывать пароль", Modifier.padding(start = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = backupPassword.length >= 12,
+                    onClick = {
+                        val password = backupPassword.toCharArray()
+                        backupPassword = ""
+                        backupPasswordDialog = false
+                        onExportBackup?.invoke(password)
+                    },
+                ) { Text("Выбрать место сохранения") }
+            },
+            dismissButton = {
+                TextButton(onClick = { backupPassword = ""; backupPasswordDialog = false }) { Text("Отмена") }
+            },
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -120,6 +165,19 @@ fun SettingsScreen(
                             )
                         }
                         Switch(checked = checkUpdates, onCheckedChange = null)
+                    }
+                }
+            }
+            if (onExportBackup != null) item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Локальная резервная копия", style = MaterialTheme.typography.titleMedium)
+                        Text("Парольный экспорт истории, сведений об устройствах и настроек. Без облака и без ключей ADB.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = { backupPassword = ""; backupPasswordDialog = true }) {
+                            Text("Создать зашифрованную копию")
+                        }
                     }
                 }
             }
