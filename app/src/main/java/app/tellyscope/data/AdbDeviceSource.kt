@@ -703,6 +703,19 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun files(deviceId: String, folder: TvFolder) = Files(session(deviceId)).list(folder)
 
+    override suspend fun browseFiles(deviceId: String, folder: TvFolder, subfolders: List<String>): List<TvFile> =
+        Files(session(deviceId)).list(folder, subfolders)
+
+    override suspend fun createDirectory(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) =
+        busy(deviceId) { Files(session(deviceId)).createDirectory(folder, subfolders, name) }
+
+    override suspend fun renameFile(deviceId: String, folder: TvFolder, subfolders: List<String>, oldName: String, newName: String) =
+        busy(deviceId) { Files(session(deviceId)).rename(folder, subfolders, oldName, newName) }
+
+    override suspend fun deleteFile(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) =
+        busy(deviceId) { Files(session(deviceId)).delete(folder, subfolders, name) }
+
+
     override suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit) =
         busy(deviceId) { Files(session(deviceId)).push(source, size, name, folder, onProgress) }
 
