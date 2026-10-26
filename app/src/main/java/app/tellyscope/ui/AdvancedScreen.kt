@@ -153,9 +153,9 @@ private fun Block(title: String, body: @Composable () -> Unit) {
 @Composable
 private fun Stats(s: Snapshot, staleSince: Long?) {
     val cells = listOf(
-        "CPU" to "${s.cpuPercent}%",
+        "CPU" to if (s.cpuAvailable) "${s.cpuPercent}%" else null,
         "Температура" to s.tempC?.let { "$it°C" },
-        "Время работы" to Copy.uptime(s.uptimeSeconds),
+        "Время работы" to if (s.uptimeAvailable) Copy.uptime(s.uptimeSeconds) else null,
         "Экран" to s.screenOn?.let { if (it) "Вкл." else "Выкл." },
     )
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
@@ -168,7 +168,7 @@ private fun Stats(s: Snapshot, staleSince: Long?) {
                 )
             }
             Column(Modifier.alpha(if (staleSince != null) 0.5f else 1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Meter("Оперативная память", s.ramUsedMb / 1024.0, s.ramTotalMb / 1024.0)
+                if (s.ramAvailable) Meter("Оперативная память", s.ramUsedMb / 1024.0, s.ramTotalMb / 1024.0)
                 s.storageUsedGb?.let { u -> s.storageTotalGb?.let { t -> Meter("Накопитель", u, t) } }
                 Row(Modifier.fillMaxWidth()) {
                     cells.forEach { (label, value) ->
