@@ -125,6 +125,11 @@ data class AppInfo(
     val homeService: Boolean = false,
     /** This TV's list says to keep it: Stop, Disable and Uninstall still run, after a warning. */
     val listKeep: Boolean = false,
+    /**
+     * An approved exact-model/firmware recovery procedure exists.
+     * False unless positive evidence was verified; an online ADB connection alone is insufficient.
+     */
+    val verifiedRestorePath: Boolean = false,
 )
 
 data class Socket(val app: String, val remote: String, val state: String)
