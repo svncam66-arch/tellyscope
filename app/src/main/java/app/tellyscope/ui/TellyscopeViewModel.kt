@@ -23,6 +23,7 @@ import app.tellyscope.data.ConnectResult
 import app.tellyscope.data.Device
 import app.tellyscope.data.DeviceSource
 import app.tellyscope.data.DeviceCapabilities
+import app.tellyscope.data.EncryptedLocalBackup
 import app.tellyscope.data.DeviceState
 import app.tellyscope.data.HistoryEntry
 import app.tellyscope.data.NetworkInfo
@@ -54,6 +55,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import okio.buffer
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Per-row connect state on the scan screen. */
@@ -174,6 +176,7 @@ class TellyscopeViewModel(
     private val clock: () -> Long = System::currentTimeMillis,
     private val updates: UpdateCheck? = null,
     private val folds: FoldBook? = null,
+    private val backupDir: File? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UiState(now = clock()))
@@ -533,6 +536,40 @@ class TellyscopeViewModel(
                 _notice.value = Copy.SCREENSHOT_FAILED
             } finally {
                 updateDevice(id) { it.copy(busy = null) }
+            }
+        }
+    }
+
+    /**
+     * User-triggered encrypted export through Android's system document picker.
+     * Only known app metadata is included. ADB keys and downloaded profiles are excluded.
+     * The password char array is cleared after the I/O attempt.
+     */
+    fun exportLocalBackup(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val dir = backupDir
+        val dest = storage
+        if (dir == null || dest == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Резервное копирование недоступно."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val archive = EncryptedLocalBackup.export(dir, passphrase)
+                dest.create(uri).buffer().use { it.write(archive) }
+                _notice.value = "Зашифрованная резервная копия сохранена. Сохраните пароль отдельно."
+            } catch (e: CancellationException) {
+                dest.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                dest.delete(uri)
+                _notice.value = "Не удалось сохранить зашифрованную копию."
+            } finally {
+                passphrase.fill('\u0000')
             }
         }
     }
