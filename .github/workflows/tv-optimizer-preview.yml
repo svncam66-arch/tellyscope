@@ -10,6 +10,10 @@ on:
       - '*.gradle.kts'
       - 'gradle.properties'
 
+concurrency:
+  group: tv-optimizer-experimental-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
