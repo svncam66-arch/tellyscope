@@ -22,6 +22,7 @@ import app.tellyscope.data.AppInfo
 import app.tellyscope.data.ConnectResult
 import app.tellyscope.data.Device
 import app.tellyscope.data.DeviceSource
+import app.tellyscope.data.DeviceCapabilities
 import app.tellyscope.data.DeviceState
 import app.tellyscope.data.HistoryEntry
 import app.tellyscope.data.NetworkInfo
@@ -78,6 +79,7 @@ data class ScanUi(
 
 data class DeviceUi(
     val snapshot: Snapshot? = null,
+    val capabilities: DeviceCapabilities? = null,
     val apps: List<AppInfo> = emptyList(),
     val network: NetworkInfo? = null,
     val history: List<HistoryEntry> = emptyList(),
@@ -200,6 +202,7 @@ class TellyscopeViewModel(
     private val undoInFlight = mutableSetOf<Long>()
     private var liveJob: Job? = null
     private var mediumJob: Job? = null
+    private var probeJob: Job? = null
     private var listsJob: Job? = null
     private var requestJob: Job? = null
     private var updateJob: Job? = null
@@ -342,6 +345,7 @@ class TellyscopeViewModel(
     fun select(id: String?) {
         liveJob?.cancel()
         mediumJob?.cancel()
+        probeJob?.cancel()
         listsJob?.cancel()
         requestJob?.cancel()
         // A copy still running on this TV keeps its dialog, after a reconnect or a look at another TV.
@@ -354,6 +358,16 @@ class TellyscopeViewModel(
             _state.update { if (it.selectedId == device.id) it.copy(device = it.device.copy(history = history)) else it }
         }
         if (device.state != DeviceState.Online) return
+        probeJob = viewModelScope.launch {
+            val facts = try {
+                source.probeCapabilities(device.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null // No guesses about this firmware if read-only ADB fails.
+            }
+            updateDevice(device.id) { it.copy(capabilities = facts) }
+        }
         liveJob = viewModelScope.launch {
             source.live(id!!).collect { snap ->
                 lastSnapshot[id] = snap
