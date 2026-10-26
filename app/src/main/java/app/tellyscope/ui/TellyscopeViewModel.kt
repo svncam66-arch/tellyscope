@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import okio.buffer
 import java.util.concurrent.ConcurrentHashMap
 
 /** Per-row connect state on the scan screen. */
@@ -518,6 +519,25 @@ class TellyscopeViewModel(
                 _notice.value = Copy.SCREENSHOT_FAILED
             } finally {
                 updateDevice(id) { it.copy(busy = null) }
+            }
+        }
+    }
+
+    /** Saves a local, privacy-aware diagnostic report through Android's document picker. */
+    fun saveDiagnosticReport(uri: Uri?) {
+        if (uri == null) return
+        val storage = storage ?: return
+        val report = DiagnosticReport.render(_state.value, clock())
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                storage.create(uri).buffer().use { sink -> sink.writeUtf8(report) }
+                _notice.value = "Диагностический отчёт сохранён."
+            } catch (e: CancellationException) {
+                storage.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                storage.delete(uri)
+                _notice.value = "Не удалось сохранить отчёт. Проверьте доступное место и разрешение на запись."
             }
         }
     }
