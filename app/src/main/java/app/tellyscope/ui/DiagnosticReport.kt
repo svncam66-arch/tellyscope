@@ -3,6 +3,7 @@
 package app.tellyscope.ui
 
 import app.tellyscope.data.DeviceState
+import app.tellyscope.data.PerformanceRun
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -62,6 +63,23 @@ object DiagnosticReport {
                 appendLine("Процессов в доступной статистике: ${sample.procs.size}")
             }
             appendLine()
+            fun lab(label: String, run: PerformanceRun?) {
+                if (run == null) return
+                fun metric(mean: Double?, deviation: Double?, unit: String): String =
+                    if (mean == null || deviation == null) "нет данных"
+                    else String.format(Locale.ROOT, "%.1f ± %.1f %s", mean, deviation, unit)
+                appendLine(label + ": ${run.observations} последовательных измерений")
+                appendLine("Период: " + time(run.firstAt) + " — " + time(run.lastAt))
+                appendLine("CPU: " + metric(run.cpuPercent?.average, run.cpuPercent?.standardDeviation, "%"))
+                appendLine("RAM: " + metric(run.ramUsedMb?.average, run.ramUsedMb?.standardDeviation, "МБ"))
+                appendLine("Температура: " + metric(run.temperatureC?.average, run.temperatureC?.standardDeviation, "°C"))
+            }
+            if (ui.labBefore != null || ui.labAfter != null) {
+                appendLine("Лаборатория измерений (описательные значения, не тест скорости):")
+                lab("До", ui.labBefore)
+                lab("После", ui.labAfter)
+                appendLine()
+            }
             appendLine("Приложений в текущем списке: ${ui.apps.size}")
             appendLine("Системных приложений: ${ui.apps.count { it.system }}")
             appendLine("Отключённых приложений: ${ui.apps.count { !it.enabled }}")
