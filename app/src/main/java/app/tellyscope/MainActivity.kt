@@ -180,6 +180,14 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
         exportPassphrase = null
         vm.exportLocalBackup(uri, pwd)
     }
+    var importPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val importBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val pwd = importPassphrase
+        importPassphrase = null
+        vm.previewLocalBackup(uri, pwd)
+    }
 
     state.update?.let { u ->
         UpdateDialog(u, onGet = { vm.updateLater(); runCatching { browser.openUri(u.url) } }, onLater = vm::updateLater, onSkip = vm::skipUpdate)
@@ -241,6 +249,14 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
                 exportPassphrase = pwd
                 exportBackup.launch("tv-optimizer-pro.tvopbak")
             },
+            onImportBackup = { pwd ->
+                importPassphrase?.fill('\u0000')
+                importPassphrase = pwd
+                importBackup.launch(arrayOf("*/*"))
+            },
+            backupEntries = state.backupEntries,
+            onRestoreBackup = vm::restoreLocalBackup,
+            onCancelBackupRestore = vm::cancelLocalBackupRestore,
             snackbar = snackbar,
         )
     } else if (debloat) {
