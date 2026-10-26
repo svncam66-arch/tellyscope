@@ -717,10 +717,24 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
 
     override suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit) =
-        busy(deviceId) { Files(session(deviceId)).push(source, size, name, folder, onProgress) }
+        busy(deviceId) { Files(session(deviceId)).push(source, size, name, folder, onProgress = onProgress) }
 
     override suspend fun pull(deviceId: String, folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit) =
-        busy(deviceId) { Files(session(deviceId)).pull(folder, file, sink, onProgress) }
+        busy(deviceId) { Files(session(deviceId)).pull(folder, file, sink, onProgress = onProgress) }
+
+    override suspend fun pushInto(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit,
+    ): String = busy(deviceId) {
+        Files(session(deviceId)).push(source, size, name, folder, subfolders, onProgress)
+    }
+
+    override suspend fun pullFrom(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        file: TvFile, sink: Sink, onProgress: (Progress) -> Unit,
+    ) = busy(deviceId) {
+        Files(session(deviceId)).pull(folder, file, sink, subfolders, onProgress)
+    }
 
     private fun session(deviceId: String) =
         links[deviceId]?.session ?: throw IllegalStateException("$deviceId is offline")
