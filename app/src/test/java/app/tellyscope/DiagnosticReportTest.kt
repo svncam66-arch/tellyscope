@@ -53,6 +53,14 @@ class DiagnosticReportTest {
         assertFalse(report.contains("192.168."))
     }
 
+    @Test fun unavailableCpuAndRamAreNotReportedAsZero() {
+        val snapshot = Snapshot(100L, 0, 0, 0, null, null, null, 0L, null, emptyList(),
+            cpuAvailable = false, ramAvailable = false, uptimeAvailable = false)
+        val report = DiagnosticReport.render(state(true, snapshot), 200L)
+        assertTrue(report.contains("Загрузка CPU: нет данных"))
+        assertTrue(report.contains("RAM: нет данных"))
+    }
+
     @Test fun noDeviceProducesHonestEmptyReport() {
         val report = DiagnosticReport.render(UiState(), 0L)
         assertTrue(report.contains("Нет выбранного устройства"))
