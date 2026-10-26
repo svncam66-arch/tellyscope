@@ -32,6 +32,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,7 @@ import app.tellyscope.ui.theme.StatNumber
 fun AdvancedScreen(
     state: UiState,
     back: () -> Unit,
+    onExportReport: () -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val device = state.selected ?: return
@@ -77,7 +79,8 @@ fun AdvancedScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Advanced") },
+                title = { Text("Диагностика") },
+                actions = { TextButton(onClick = onExportReport) { Text("Сохранить отчёт") } },
                 navigationIcon = {
                     IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the TV's page") }
                 },
@@ -92,12 +95,12 @@ fun AdvancedScreen(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text("This TV", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
+                        Text("Устройство", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
                         listOfNotNull(
-                            "IP address" to device.hit.ip,
-                            "Port" to device.hit.port.toString(),
-                            (device.manufacturer ?: device.hit.maker)?.let { "Maker" to it },
-                            device.hit.hostname?.let { "Network name" to it },
+                            "IP-адрес" to device.hit.ip,
+                            "Порт" to device.hit.port.toString(),
+                            (device.manufacturer ?: device.hit.maker)?.let { "Производитель" to it },
+                            device.hit.hostname?.let { "Имя в сети" to it },
                         ).forEach { (k, v) -> KeyValue(k, v) }
                     }
                 }
@@ -108,7 +111,7 @@ fun AdvancedScreen(
             } else {
                 item {
                     Text(
-                        if (offline) Copy.noStats(device.state) else "Loading stats…",
+                        if (offline) Copy.noStats(device.state) else "Загрузка статистики…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -116,11 +119,11 @@ fun AdvancedScreen(
             }
             // A TV that lists no processes gets no charts: no bars beats an empty card.
             if (byApp.isNotEmpty()) {
-                item { UsageCard("CPU by app", byApp.map { (n, ps) -> n to ps.sumOf { it.cpuPercent } }, fmt = { "%.0f%%".format(it) }) }
-                item { UsageCard("RAM by app", byApp.map { (n, ps) -> n to ps.sumOf { it.ramMb }.toDouble() }, fmt = { Copy.mb(it.toInt()) }) }
-                item { Block("Processes") { ProcessTable(snap?.procs.orEmpty(), ui.apps) } }
+                item { UsageCard("CPU по приложениям", byApp.map { (n, ps) -> n to ps.sumOf { it.cpuPercent } }, fmt = { "%.0f%%".format(it) }) }
+                item { UsageCard("Память по приложениям", byApp.map { (n, ps) -> n to ps.sumOf { it.ramMb }.toDouble() }, fmt = { Copy.mb(it.toInt()) }) }
+                item { Block("Процессы") { ProcessTable(snap?.procs.orEmpty(), ui.apps) } }
             }
-            ui.network?.let { n -> item { Block("Network") { NetworkBlock(n) } } }
+            ui.network?.let { n -> item { Block("Сеть") { NetworkBlock(n) } } }
         }
     }
 }
@@ -143,22 +146,22 @@ private fun Block(title: String, body: @Composable () -> Unit) {
 private fun Stats(s: Snapshot, staleSince: Long?) {
     val cells = listOf(
         "CPU" to "${s.cpuPercent}%",
-        "Temperature" to s.tempC?.let { "$it°C" },
-        "On for" to Copy.uptime(s.uptimeSeconds),
-        "Screen" to s.screenOn?.let { if (it) "On" else "Off" },
+        "Температура" to s.tempC?.let { "$it°C" },
+        "Время работы" to Copy.uptime(s.uptimeSeconds),
+        "Экран" to s.screenOn?.let { if (it) "Вкл." else "Выкл." },
     )
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (staleSince != null) {
                 Text(
-                    "As of ${Copy.ago(s.at, staleSince)}",
+                    "На момент: ${Copy.ago(s.at, staleSince)}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Column(Modifier.alpha(if (staleSince != null) 0.5f else 1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Meter("Memory", s.ramUsedMb / 1024.0, s.ramTotalMb / 1024.0)
-                s.storageUsedGb?.let { u -> s.storageTotalGb?.let { t -> Meter("Storage", u, t) } }
+                Meter("Оперативная память", s.ramUsedMb / 1024.0, s.ramTotalMb / 1024.0)
+                s.storageUsedGb?.let { u -> s.storageTotalGb?.let { t -> Meter("Накопитель", u, t) } }
                 Row(Modifier.fillMaxWidth()) {
                     cells.forEach { (label, value) ->
                         Column(Modifier.weight(1f)) {
@@ -179,7 +182,7 @@ private fun Meter(label: String, usedGb: Double, totalGb: Double) {
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${(frac * 100).toInt()}% used", style = StatNumber)
+                Text("${(frac * 100).toInt()}% занято", style = StatNumber)
             }
             Text(Copy.gbOf(usedGb, totalGb), style = SmallNumber, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -206,7 +209,7 @@ private fun UsageCard(title: String, rows: List<Pair<String, Double>>, fmt: (Dou
 private fun Bars(rows: List<Pair<String, Double>>, fmt: (Double) -> String, top: Int = 6) {
     val sorted = rows.sortedByDescending { it.second }
     val rest = sorted.drop(top).sumOf { it.second }
-    val shown = sorted.take(top) + if (rest > 0) listOf("Other" to rest) else emptyList()
+    val shown = sorted.take(top) + if (rest > 0) listOf("Прочее" to rest) else emptyList()
     val max = shown.maxOfOrNull { it.second }?.coerceAtLeast(1.0) ?: 1.0
     shown.forEach { (name, v) ->
         val frac by animateFloatAsState((v / max).toFloat(), MaterialTheme.motionScheme.defaultSpatialSpec(), label = "bar")
@@ -231,7 +234,7 @@ private fun ProcessTable(procs: List<Proc>, apps: List<AppInfo>) {
         .sortedByDescending { (_, ps) -> ps.sumOf { it.cpuPercent } }
     if (groups.isEmpty()) return EmptyLine("")
     Row {
-        Text("App", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Приложение", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("CPU", Modifier.width(56.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End)
         Text("RAM", Modifier.width(72.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End)
     }
@@ -261,17 +264,17 @@ private fun ProcessTable(procs: List<Proc>, apps: List<AppInfo>) {
 private fun NetworkBlock(n: NetworkInfo) {
     // Already the technical screen: every fact shows, nothing behind a Details tap.
     listOfNotNull(
-        "Connection" to listOfNotNull(if (n.iface == "wifi" || n.iface.startsWith("wlan")) "Wi-Fi" else "Ethernet", n.ssid).joinToString(" · "),
-        n.rssi?.let { "Signal" to "${signalWord(it).replaceFirstChar(Char::uppercase)} ($it dBm)" },
-        "IP address" to n.ip,
+        "Подключение" to listOfNotNull(if (n.iface == "wifi" || n.iface.startsWith("wlan")) "Wi-Fi" else "Ethernet", n.ssid).joinToString(" · "),
+        n.rssi?.let { "Сигнал" to "${signalWord(it).replaceFirstChar(Char::uppercase)} ($it dBm)" },
+        "IP-адрес" to n.ip,
         n.mac?.let { "MAC" to it },
-        n.linkMbps?.let { "Link speed" to "$it Mbps" },
+        n.linkMbps?.let { "Скорость соединения" to "$it Mbps" },
     ).forEach { (k, v) -> KeyValue(k, v) }
     Spacer(Modifier.height(8.dp))
-    Text("Data used", style = MaterialTheme.typography.titleSmall)
+    Text("Использование данных", style = MaterialTheme.typography.titleSmall)
     Bars(n.traffic.map { it.app to (it.rxMb + it.txMb).toDouble() }, fmt = { Copy.mb(it.toInt()) })
     Spacer(Modifier.height(8.dp))
-    Text("Open connections", style = MaterialTheme.typography.titleSmall)
+    Text("Активные соединения", style = MaterialTheme.typography.titleSmall)
     if (n.sockets.isEmpty()) EmptyLine("")
     n.sockets.forEach { s ->
         Row(Modifier.padding(vertical = 2.dp)) {
@@ -282,8 +285,8 @@ private fun NetworkBlock(n: NetworkInfo) {
 }
 
 private fun signalWord(rssi: Int) = when {
-    rssi >= -55 -> "strong"
-    rssi >= -67 -> "good"
-    rssi >= -75 -> "weak"
-    else -> "very weak"
+    rssi >= -55 -> "отличный"
+    rssi >= -67 -> "хороший"
+    rssi >= -75 -> "слабый"
+    else -> "очень слабый"
 }
