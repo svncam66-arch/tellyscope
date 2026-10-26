@@ -44,6 +44,8 @@ object DiagnosticReport {
             appendLine("Производитель: " + text(device.manufacturer))
             appendLine("Модель: " + text(device.model))
             appendLine("Версия Android: " + text(device.android))
+            appendLine("ADB Android API: " + (ui.capabilities?.sdk?.toString() ?: "нет данных"))
+            appendLine("Номер сборки: " + text(ui.capabilities?.buildId))
             appendLine("Проверенная модель/прошивка: не подтверждена этим отчётом")
             appendLine()
             if (sample == null) {
