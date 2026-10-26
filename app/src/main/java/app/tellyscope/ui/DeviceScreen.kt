@@ -88,6 +88,7 @@ data class DeviceActions(
     val folder: (TvFolder) -> Unit = {},
     val enterFolder: (String) -> Unit = {},
     val parentFolder: () -> Unit = {},
+    val pickFileHere: () -> Unit = {},
     val createFolder: (String) -> Unit = {},
     val renameFile: (TvFile, String) -> Unit = { _, _ -> },
     val deleteFile: (TvFile) -> Unit = {},
