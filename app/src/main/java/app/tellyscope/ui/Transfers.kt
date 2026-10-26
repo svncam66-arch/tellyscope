@@ -163,6 +163,7 @@ fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions) {
             TextButton(onClick = { typedName = ""; creating = true }, enabled = !files.busy) {
                 Text("Новая папка")
             }
+            TextButton(onClick = actions.pickFileHere, enabled = !files.busy) { Text("Отправить сюда") }
         }
         when {
             files.busy -> Muted("Выполняется файловая операция…")
