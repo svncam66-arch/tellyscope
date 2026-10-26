@@ -93,6 +93,21 @@ interface DeviceSource {
     /** Files in one of the shared folders, newest first. */
     suspend fun files(deviceId: String, folder: TvFolder): List<TvFile>
 
+    /** Shared user folders only; subpaths are validated by the Android/ADB layer. */
+    suspend fun browseFiles(deviceId: String, folder: TvFolder, subfolders: List<String>): List<TvFile> =
+        if (subfolders.isEmpty()) files(deviceId, folder) else emptyList()
+
+    suspend fun createDirectory(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        throw UnsupportedOperationException("Создание папок недоступно на этом устройстве.")
+    }
+    suspend fun renameFile(deviceId: String, folder: TvFolder, subfolders: List<String>, oldName: String, newName: String) {
+        throw UnsupportedOperationException("Переименование недоступно на этом устройстве.")
+    }
+    suspend fun deleteFile(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        throw UnsupportedOperationException("Удаление недоступно на этом устройстве.")
+    }
+
+
     /** Copies a phone file to the TV without overwriting anything; returns the name it got. */
     suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit): String
 
