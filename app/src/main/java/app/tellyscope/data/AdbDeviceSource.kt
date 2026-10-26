@@ -426,6 +426,11 @@ class AdbDeviceSource(context: Context) : DeviceSource {
         busy(deviceId) { actNow(deviceId, action, packageName, undoing) }
 
     private suspend fun actNow(deviceId: String, action: Action, packageName: String, undoing: Long?): HistoryEntry {
+        // Source-level fail-closed preflight: protects other callers, not only Compose UI.
+        if (action in setOf(Action.Stop, Action.Disable, Action.Uninstall)) {
+            val current = apps(deviceId).firstOrNull { it.packageName == packageName }
+            PackageActionPolicy.refusal(current, action)?.let { throw IllegalStateException(it) }
+        }
         val shell = session(deviceId)
         // Before the first change on a TV, note what was already off: Restore must leave those alone.
         val key = key(deviceId)
