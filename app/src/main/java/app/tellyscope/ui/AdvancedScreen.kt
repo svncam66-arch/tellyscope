@@ -96,6 +96,14 @@ fun AdvancedScreen(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         Text("Устройство", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 4.dp))
+                        Text("Определение прошивки — только чтение", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ui.capabilities?.let { capabilities ->
+                            KeyValue("Модель по ADB", capabilities.model ?: "Не определена")
+                            KeyValue("Android API", capabilities.sdk?.toString() ?: "Не определён")
+                            KeyValue("Номер сборки", capabilities.buildId ?: "Не определён")
+                            KeyValue("Точная прошивка", if (capabilities.exactFirmwareKnown) "Определена, совместимость не проверена" else "Не определена")
+                        } ?: KeyValue("Возможности устройства", "Не проверены")
                         listOfNotNull(
                             "IP-адрес" to device.hit.ip,
                             "Порт" to device.hit.port.toString(),
