@@ -143,11 +143,11 @@ internal val Broom = ImageVector.Builder("Broom", 24.dp, 24.dp, 24f, 24f)
 
 /** Browses only verified directories under the TV's public Download / Movies roots. */
 @Composable
-fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions) {
-    var creating by remember(files.folder, files.subfolders) { mutableStateOf(false) }
-    var renameTarget by remember(files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
-    var deleteTarget by remember(files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
-    var typedName by remember(files.folder, files.subfolders) { mutableStateOf("") }
+fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions, deviceId: String = "") {
+    var creating by remember(deviceId, files.folder, files.subfolders) { mutableStateOf(false) }
+    var renameTarget by remember(deviceId, files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
+    var deleteTarget by remember(deviceId, files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
+    var typedName by remember(deviceId, files.folder, files.subfolders) { mutableStateOf("") }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -178,6 +178,7 @@ fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions) {
                     FileRow(
                         file,
                         now,
+                        deviceId = deviceId,
                         onOpen = { actions.enterFolder(file.name) },
                         onSave = { actions.saveFile(file) },
                         onRename = { typedName = file.name; renameTarget = file },
@@ -246,6 +247,7 @@ fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions) {
 private fun FileRow(
     file: TvFile,
     now: Long,
+    deviceId: String,
     onOpen: () -> Unit,
     onSave: () -> Unit,
     onRename: () -> Unit,
@@ -266,7 +268,7 @@ private fun FileRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        var menuOpen by remember(file.name) { mutableStateOf(false) }
+        var menuOpen by remember(deviceId, file.name) { mutableStateOf(false) }
         TextButton(onClick = if (file.isDirectory) onOpen else onSave) {
             Text(if (file.isDirectory) "Открыть" else "Скачать")
         }
