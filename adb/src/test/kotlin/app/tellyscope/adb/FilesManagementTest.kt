@@ -2,6 +2,8 @@
 package app.tellyscope.adb
 
 import kotlinx.coroutines.test.runTest
+import okio.Buffer
+import kotlin.test.assertContentEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -87,6 +89,35 @@ class FilesManagementTest {
             Files(sh).delete(TvFolder.DOWNLOAD, emptyList(), "My Folder")
         }
         assertTrue(sh.ran.none { it.startsWith("rmdir ") || it.startsWith("rm ") })
+    }
+
+    @Test fun sendsAndDownloadsFileInsideVerifiedNestedFolder() = runTest {
+        val sh = FakeShell()
+        sh.transfer.directories += "/sdcard/Movies/Sub"
+        sh.transfer.directories += "/sdcard/Movies/Sub/Other"
+        val source = byteArrayOf(10, 11, 12)
+        val saved = Files(sh).push(
+            Buffer().write(source), source.size.toLong(), "clip.bin",
+            TvFolder.MOVIES, listOf("Sub", "Other"),
+        )
+        assertEquals("clip.bin", saved)
+        assertContentEquals(source, sh.transfer.files["/sdcard/Movies/Sub/Other/clip.bin"])
+        val file = Files(sh).list(TvFolder.MOVIES, listOf("Sub", "Other")).single()
+        val result = Buffer()
+        Files(sh).pull(TvFolder.MOVIES, file, result, listOf("Sub", "Other"))
+        assertContentEquals(source, result.readByteArray())
+    }
+
+    @Test fun cannotReadThroughNonDirectoryEntryOrEscapeIntoParent() = runTest {
+        val sh = FakeShell()
+        sh.transfer.files["/sdcard/Download/link"] = byteArrayOf(1)
+        assertFailsWith<IllegalArgumentException> {
+            Files(sh).list(TvFolder.DOWNLOAD, listOf("link"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            Files(sh).list(TvFolder.DOWNLOAD, listOf(".."))
+        }
+        assertTrue(sh.ran.isEmpty())
     }
 
     @Test fun neverMutatesHiddenOrUnknownEntries() = runTest {
