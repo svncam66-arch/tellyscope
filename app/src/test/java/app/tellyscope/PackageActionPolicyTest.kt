@@ -10,8 +10,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PackageActionPolicyTest {
-    private fun app(system: Boolean, removable: Boolean = !system, protectedReason: String? = null) =
-        AppInfo("org.example.demo", "Пример", null, system, true, protectedReason, "1", removable = removable)
+    private fun app(system: Boolean, removable: Boolean = !system, protectedReason: String? = null,
+                    verifiedRestorePath: Boolean = false, listKeep: Boolean = false) =
+        AppInfo("org.example.demo", "Пример", null, system, true, protectedReason, "1",
+            removable = removable, verifiedRestorePath = verifiedRestorePath, listKeep = listKeep)
 
     @Test fun protectedSystemCannotBeDisabledOrStopped() {
         assertNotNull(PackageActionPolicy.refusal(app(true, protectedReason = "критический"), Action.Disable))
@@ -19,10 +21,21 @@ class PackageActionPolicyTest {
         assertNotNull(PackageActionPolicy.refusal(app(true, protectedReason = "критический"), Action.Uninstall))
     }
 
-    @Test fun unknownSystemCanBeDisabledButCannotBeUninstalled() {
+    @Test fun unknownSystemCannotBeDisabledUntilRestorePathIsVerified() {
         val system = app(true)
+        assertNotNull(PackageActionPolicy.refusal(system, Action.Disable))
+        assertNotNull(PackageActionPolicy.refusal(system, Action.Uninstall))
+    }
+
+    @Test fun exactFirmwareRecoveryEvidenceAllowsOnlyDisabling() {
+        val system = app(true, verifiedRestorePath = true)
         assertNull(PackageActionPolicy.refusal(system, Action.Disable))
         assertNotNull(PackageActionPolicy.refusal(system, Action.Uninstall))
+    }
+
+    @Test fun keepListCannotOverrideSecurity() {
+        val system = app(true, verifiedRestorePath = true, listKeep = true)
+        assertNotNull(PackageActionPolicy.refusal(system, Action.Disable))
     }
 
     @Test fun removableUserAppMayBeUninstalled() {
