@@ -86,6 +86,12 @@ data class DeviceActions(
     val closeSideload: () -> Unit = {},
     val openInstalled: () -> Unit = {},
     val folder: (TvFolder) -> Unit = {},
+    val enterFolder: (String) -> Unit = {},
+    val parentFolder: () -> Unit = {},
+    val createFolder: (String) -> Unit = {},
+    val renameFile: (TvFile, String) -> Unit = { _, _ -> },
+    val deleteFile: (TvFile) -> Unit = {},
+
     /** Shows that folder, then opens the system picker for a file to send into it. */
     val pickFile: (TvFolder) -> Unit = {},
     /** Asks where to save [TvFile] on the phone, then copies it. */
