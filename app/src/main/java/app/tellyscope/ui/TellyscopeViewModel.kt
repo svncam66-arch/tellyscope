@@ -853,6 +853,7 @@ class TellyscopeViewModel(
         val id = _state.value.selectedId ?: return
         val storage = storage ?: return
         val folder = _state.value.device.files.folder
+        val subfolders = _state.value.device.files.subfolders
         transferJobs[id] = viewModelScope.launch {
             val file = try {
                 storage.open(uri)
@@ -863,7 +864,9 @@ class TellyscopeViewModel(
             setTransfer(id, TransferUi(file.name, toTv = true, folder = folder))
             try {
                 val saved = file.source.use { src ->
-                    source.push(id, folder, file.name, file.size, src) { p -> updateTransfer(id) { it.copy(progress = p) } }
+                    source.pushInto(id, folder, subfolders, file.name, file.size, src) { p ->
+                        updateTransfer(id) { it.copy(progress = p) }
+                    }
                 }
                 // Close the dialog before the reload: a Cancel tapped now would report a sent file as cancelled.
                 setTransfer(id, null)
@@ -880,30 +883,37 @@ class TellyscopeViewModel(
         }
     }
 
-    /** The file whose "save as" picker is open. Kept here so it survives the activity being recreated behind the picker. */
-    private var saving: TvFile? = null
+    /** Captures an exact device and directory before Android's save-file picker opens. */
+    private data class PendingDownload(
+        val deviceId: String, val folder: TvFolder, val subfolders: List<String>, val file: TvFile,
+    )
+    private var saving: PendingDownload? = null
 
     fun saving(file: TvFile) {
-        saving = file
-    }
-
-    /** The picker's answer: copies the file there, or does nothing if the user backed out. */
-    fun saveTo(uri: Uri?) {
-        val file = saving ?: return
-        saving = null
-        if (uri != null) pull(file, uri)
-    }
-
-    /** A cancelled or failed copy removes the partial file. */
-    private fun pull(file: TvFile, uri: Uri) {
         val id = _state.value.selectedId ?: return
+        val current = _state.value.device.files
+        if (file.isDirectory || file !in current.list.orEmpty()) return
+        saving = PendingDownload(id, current.folder, current.subfolders, file)
+    }
+
+    /** The picker's answer: copying always targets the original TV, not a TV switched to meanwhile. */
+    fun saveTo(uri: Uri?) {
+        val pending = saving ?: return
+        saving = null
+        if (uri != null) pull(pending, uri)
+    }
+
+    /** A cancelled or failed copy removes the partial phone file. */
+    private fun pull(pending: PendingDownload, uri: Uri) {
         val storage = storage ?: return
-        val folder = _state.value.device.files.folder
+        val (id, folder, subfolders, file) = pending
         setTransfer(id, TransferUi(file.name, toTv = false, folder = folder, progress = Progress(0, file.size)))
         transferJobs[id] = viewModelScope.launch {
             try {
                 storage.create(uri).use { sink ->
-                    source.pull(id, folder, file, sink) { p -> updateTransfer(id) { it.copy(progress = p) } }
+                    source.pullFrom(id, folder, subfolders, file, sink) { p ->
+                        updateTransfer(id) { it.copy(progress = p) }
+                    }
                 }
                 _notice.value = Copy.saved(file.name)
             } catch (e: CancellationException) {
