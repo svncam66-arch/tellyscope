@@ -312,6 +312,9 @@ class AdbDeviceSource(context: Context) : DeviceSource {
                     procs = s.processes.map { Proc(it.pid, it.name, it.packageName, it.cpuPercent ?: 0.0, (it.rssKb / 1024).toInt()) },
                     netBytesPerSec = s.netBytesPerSec,
                     softwareMonth = s.softwareMonth,
+                    cpuAvailable = s.cpuPercent != null,
+                    ramAvailable = mem != null,
+                    uptimeAvailable = s.uptimeSeconds != null,
                 )
             }
     }
