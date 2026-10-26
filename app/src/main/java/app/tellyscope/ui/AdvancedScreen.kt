@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +53,10 @@ import app.tellyscope.data.DeviceState
 import app.tellyscope.data.NetworkInfo
 import app.tellyscope.data.Proc
 import app.tellyscope.data.Snapshot
+import app.tellyscope.data.MeasuredMetric
+import app.tellyscope.data.PerformanceRun
+import app.tellyscope.data.PerformanceLab
+import java.util.Locale
 import app.tellyscope.ui.theme.SmallNumber
 import app.tellyscope.ui.theme.StatNumber
 
@@ -65,6 +70,7 @@ fun AdvancedScreen(
     state: UiState,
     back: () -> Unit,
     onExportReport: () -> Unit = {},
+    onMeasure: (Boolean) -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val device = state.selected ?: return
@@ -125,6 +131,7 @@ fun AdvancedScreen(
                     )
                 }
             }
+            item { LabBlock(ui.labBefore, ui.labAfter, ui.labBusy, !offline, onMeasure) }
             // A TV that lists no processes gets no charts: no bars beats an empty card.
             if (byApp.isNotEmpty()) {
                 item { UsageCard("CPU по приложениям", byApp.map { (n, ps) -> n to ps.sumOf { it.cpuPercent } }, fmt = { "%.0f%%".format(it) }) }
@@ -134,6 +141,57 @@ fun AdvancedScreen(
             ui.network?.let { n -> item { Block("Сеть") { NetworkBlock(n) } } }
         }
     }
+}
+
+@Composable
+private fun LabBlock(
+    before: PerformanceRun?,
+    after: PerformanceRun?,
+    busy: Boolean,
+    online: Boolean,
+    onMeasure: (Boolean) -> Unit,
+) {
+    Block("Лаборатория измерений") {
+        Text(
+            "Сравнение шести последовательных реальных показаний ADB. " +
+                "Условия нагрузки должны быть одинаковыми; снижение CPU само по себе не доказывает ускорение ТВ.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onMeasure(true) }, enabled = online && !busy) {
+                Text("Измерить до")
+            }
+            Button(onClick = { onMeasure(false) }, enabled = online && !busy && before != null) {
+                Text("Измерить после")
+            }
+        }
+        if (busy) Text("Сбор реальных показаний…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (before != null) LabNumbers("До изменений", before)
+        if (after != null) LabNumbers("После изменений", after)
+        if (before != null && after != null) {
+            fun delta(a: MeasuredMetric?, b: MeasuredMetric?, unit: String): String {
+                val change = PerformanceLab.change(a, b)
+                return if (change == null) "нет сопоставимых измерений"
+                    else String.format(Locale.ROOT, "%+.1f %s", change, unit)
+            }
+            Text("Разность «после − до» (не оценка скорости)", style = MaterialTheme.typography.titleSmall)
+            Text("CPU: " + delta(before.cpuPercent, after.cpuPercent, "п.п."))
+            Text("Оперативная память: " + delta(before.ramUsedMb, after.ramUsedMb, "МБ"))
+            Text("Накопитель: " + delta(before.storageUsedGb, after.storageUsedGb, "ГБ"))
+        }
+    }
+}
+
+@Composable
+private fun LabNumbers(label: String, run: PerformanceRun) {
+    fun metric(m: MeasuredMetric?, unit: String): String = if (m == null) "нет данных"
+        else String.format(Locale.ROOT, "%.1f ± %.1f %s (n=%d)", m.average, m.standardDeviation, unit, m.n)
+    Text("$label · ${run.observations} измерений", style = MaterialTheme.typography.titleSmall)
+    Text("CPU: " + metric(run.cpuPercent, "%"))
+    Text("Оперативная память: " + metric(run.ramUsedMb, "МБ"))
+    Text("Накопитель: " + metric(run.storageUsedGb, "ГБ"))
+    Text("Температура: " + metric(run.temperatureC, "°C"))
 }
 
 @Composable
