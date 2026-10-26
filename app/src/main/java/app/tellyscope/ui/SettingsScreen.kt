@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -81,12 +82,19 @@ fun SettingsScreen(
     onCheckUpdates: (Boolean) -> Unit,
     back: () -> Unit,
     onExportBackup: ((CharArray) -> Unit)? = null,
+    onImportBackup: ((CharArray) -> Unit)? = null,
+    backupEntries: Set<String> = emptySet(),
+    onRestoreBackup: (Set<String>) -> Unit = {},
+    onCancelBackupRestore: () -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     var editing by rememberSaveable { mutableStateOf(false) }
     var backupPasswordDialog by rememberSaveable { mutableStateOf(false) }
     var backupPassword by remember { mutableStateOf("") }
     var backupVisible by rememberSaveable { mutableStateOf(false) }
+    var backupMode by rememberSaveable { mutableStateOf("export") }
+    var checkedSections by remember { mutableStateOf(emptySet<String>()) }
+
 
     var advanced by rememberSaveable { mutableStateOf(false) }
     val browser = LocalUriHandler.current
@@ -98,8 +106,12 @@ fun SettingsScreen(
             title = { Text("Зашифрованная резервная копия") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Сохраняются локальные сведения об устройствах, история и настройки. Ключи ADB в копию не включаются.")
-                    Text("Придумайте отдельный пароль длиной не менее 12 символов и храните его надёжно.")
+                    Text(if (backupMode == "export")
+                        "Сохраняются локальные сведения об устройствах, история и настройки. Ключи ADB в копию не включаются."
+                    else "Выберите зашифрованный файл и введите его пароль. После проверки вы сможете выбрать разделы восстановления.")
+                    Text(if (backupMode == "export")
+                        "Придумайте отдельный пароль длиной не менее 12 символов и храните его надёжно."
+                    else "Введите пароль, с которым файл был создан.")
                     OutlinedTextField(
                         value = backupPassword,
                         onValueChange = { backupPassword = it },
@@ -117,14 +129,15 @@ fun SettingsScreen(
             },
             confirmButton = {
                 Button(
-                    enabled = backupPassword.length >= 12,
+                    enabled = if (backupMode == "export") backupPassword.length >= 12 else backupPassword.isNotEmpty(),
                     onClick = {
                         val password = backupPassword.toCharArray()
                         backupPassword = ""
                         backupPasswordDialog = false
-                        onExportBackup?.invoke(password)
+                        if (backupMode == "export") onExportBackup?.invoke(password)
+                        else onImportBackup?.invoke(password)
                     },
-                ) { Text("Выбрать место сохранения") }
+                ) { Text(if (backupMode == "export") "Выбрать место сохранения" else "Выбрать файл копии") }
             },
             dismissButton = {
                 TextButton(onClick = { backupPassword = ""; backupPasswordDialog = false }) { Text("Отмена") }
@@ -132,6 +145,44 @@ fun SettingsScreen(
         )
     }
 
+    if (backupEntries.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { checkedSections = emptySet(); onCancelBackupRestore() },
+            title = { Text("Выберите разделы восстановления") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Восстановление заменяет выбранные локальные данные. Для применения потребуется перезапуск приложения. Ключи ADB не импортируются.")
+                    backupEntries.sorted().forEach { name ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                checkedSections = if (name in checkedSections) checkedSections - name else checkedSections + name
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = name in checkedSections, onCheckedChange = null)
+                            Text(name, Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = checkedSections.isNotEmpty(),
+                    onClick = {
+                        val chosen = checkedSections
+                        checkedSections = emptySet()
+                        onRestoreBackup(chosen)
+                    },
+                ) { Text("Восстановить выбранное") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    checkedSections = emptySet()
+                    onCancelBackupRestore()
+                }) { Text("Отмена") }
+            },
+        )
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -175,8 +226,16 @@ fun SettingsScreen(
                         Text("Парольный экспорт истории, сведений об устройствах и настроек. Без облака и без ключей ADB.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = { backupPassword = ""; backupPasswordDialog = true }) {
+                        Button(onClick = { backupMode = "export"; backupPassword = ""; backupPasswordDialog = true }) {
                             Text("Создать зашифрованную копию")
+                        }
+                        if (onImportBackup != null) {
+                            TextButton(onClick = {
+                                backupMode = "import"
+                                checkedSections = emptySet()
+                                backupPassword = ""
+                                backupPasswordDialog = true
+                            }) { Text("Восстановить из зашифрованной копии") }
                         }
                     }
                 }
