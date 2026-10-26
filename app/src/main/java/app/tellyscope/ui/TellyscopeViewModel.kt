@@ -124,6 +124,8 @@ data class FilesUi(
     /** Null while loading. */
     val list: List<TvFile>? = null,
     val error: String? = null,
+    val subfolders: List<String> = emptyList(),
+    val busy: Boolean = false,
 )
 
 data class TransferUi(val name: String, val toTv: Boolean, val folder: TvFolder, val progress: Progress? = null)
@@ -771,17 +773,79 @@ class TellyscopeViewModel(
         viewModelScope.launch { loadFiles() }
     }
 
+    fun enterFolder(name: String) {
+        val files = _state.value.device.files
+        if (files.busy || files.list?.none { it.name == name && it.isDirectory } != false || files.subfolders.size >= 12) return
+        _state.update { it.copy(device = it.device.copy(files = FilesUi(files.folder, subfolders = files.subfolders + name))) }
+        viewModelScope.launch { loadFiles() }
+    }
+
+    fun parentFolder() {
+        val files = _state.value.device.files
+        if (files.busy || files.subfolders.isEmpty()) return
+        _state.update {
+            it.copy(device = it.device.copy(files = FilesUi(files.folder, subfolders = files.subfolders.dropLast(1))))
+        }
+        viewModelScope.launch { loadFiles() }
+    }
+
+    /** The UI asks explicitly before invoking any destructive operation. */
+    fun createFolder(name: String) = changeFile("Папка создана.") { id, folder, sub ->
+        source.createDirectory(id, folder, sub, name)
+    }
+
+    fun renameFile(file: TvFile, to: String) = changeFile("Имя изменено.") { id, folder, sub ->
+        require(file in _state.value.device.files.list.orEmpty()) { "Файл уже недоступен." }
+        source.renameFile(id, folder, sub, file.name, to)
+    }
+
+    fun deleteFile(file: TvFile) = changeFile("Удалено. Восстановление удалённого файла не гарантируется.") { id, folder, sub ->
+        require(file in _state.value.device.files.list.orEmpty()) { "Файл уже недоступен." }
+        source.deleteFile(id, folder, sub, file.name)
+    }
+
+    private fun changeFile(
+        success: String,
+        block: suspend (deviceId: String, folder: TvFolder, subfolders: List<String>) -> Unit,
+    ) {
+        val id = _state.value.selectedId ?: return
+        val files = _state.value.device.files
+        if (files.busy || _state.value.selected?.state != DeviceState.Online) return
+        updateDevice(id) { it.copy(files = files.copy(busy = true)) }
+        viewModelScope.launch {
+            try {
+                block(id, files.folder, files.subfolders)
+                _notice.value = success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _notice.value = "Операция не выполнена: " + (e.message ?: "неизвестная ошибка.")
+            } finally {
+                updateDevice(id) { it.copy(files = it.files.copy(busy = false)) }
+                if (_state.value.selectedId == id &&
+                    _state.value.device.files.folder == files.folder &&
+                    _state.value.device.files.subfolders == files.subfolders) loadFiles()
+            }
+        }
+    }
+
     private suspend fun loadFiles() {
         val id = _state.value.selectedId ?: return
-        val folder = _state.value.device.files.folder
+        val fileState = _state.value.device.files
+        val folder = fileState.folder
+        val subfolders = fileState.subfolders
         val ui = try {
-            FilesUi(folder, source.files(id, folder))
+            fileState.copy(list = source.browseFiles(id, folder, subfolders), error = null)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            FilesUi(folder, emptyList(), Copy.FILES_LOST)
+            fileState.copy(list = emptyList(), error = Copy.FILES_LOST)
         }
-        _state.update { s -> if (s.device.files.folder == folder) s.copy(device = s.device.copy(files = ui)) else s }
+        _state.update { st ->
+            if (st.selectedId == id && st.device.files.folder == folder && st.device.files.subfolders == subfolders)
+                st.copy(device = st.device.copy(files = ui.copy(busy = st.device.files.busy)))
+            else st
+        }
     }
 
     /** Copies a phone file into the folder on show. Never overwrites: a taken name gets " (1)". */
