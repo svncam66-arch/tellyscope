@@ -37,12 +37,14 @@ class Files(private val session: AdbSession) {
         size: Long?,
         name: String,
         folder: TvFolder,
+        subfolders: List<String> = emptyList(),
         onProgress: (Progress) -> Unit = {},
     ): String {
         // Every entry counts as taken, hidden files and folders too, not just what [list] shows.
-        val taken = runTransfer { _ -> session.list(folder.path).map { it.name }.toSet() }
+        val dir = verifiedDirectory(folder, subfolders)
+        val taken = runTransfer { _ -> session.list(dir).map { it.name }.toSet() }
         val target = uniqueName(safeName(name), taken)
-        val path = "${folder.path}/$target"
+        val path = "$dir/$target"
         runTransfer(cleanUp = { runCatching { session.shell("rm -f ${shellQuote(path)}") } }) { stopped ->
             session.push(source.counting(size, stopped, onProgress), path, FILE_MODE, System.currentTimeMillis())
         }
@@ -50,9 +52,19 @@ class Files(private val session: AdbSession) {
     }
 
     /** Copies [file] from [folder] into [sink]. On cancel the caller deletes what it was writing to. */
-    suspend fun pull(folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit = {}) {
-        require(safeName(file.name) == file.name) { "not a plain file name: ${file.name}" }
-        runTransfer { stopped -> session.pull(sink.counting(file.size, stopped, onProgress), "${folder.path}/${file.name}") }
+    suspend fun pull(
+        folder: TvFolder,
+        file: TvFile,
+        sink: Sink,
+        subfolders: List<String> = emptyList(),
+        onProgress: (Progress) -> Unit = {},
+    ) {
+        checkedSegment(file.name)
+        require(!file.isDirectory) { "Папку нельзя скачать как отдельный файл." }
+        val dir = verifiedDirectory(folder, subfolders)
+        val present = session.list(dir).any { it.name == file.name && it.mode and S_IFMT == S_IFREG }
+        require(present) { "Файл недоступен для скачивания." }
+        runTransfer { stopped -> session.pull(sink.counting(file.size, stopped, onProgress), "$dir/${file.name}") }
     }
 
     /**
