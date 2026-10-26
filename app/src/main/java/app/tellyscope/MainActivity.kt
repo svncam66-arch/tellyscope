@@ -170,6 +170,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::push) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream"), vm::saveTo)
     val saveScreenshot = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"), vm::screenshotTo)
+    val saveDiagnosticReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain"), vm::saveDiagnosticReport)
 
     state.update?.let { u ->
         UpdateDialog(u, onGet = { vm.updateLater(); runCatching { browser.openUri(u.url) } }, onLater = vm::updateLater, onSkip = vm::skipUpdate)
@@ -216,7 +217,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             vm.showStats(StatsProfile.ADVANCED)
             onDispose { vm.showStats(StatsProfile.OTHER) }
         }
-        AdvancedScreen(state, back = { advanced = false }, snackbar = snackbar)
+        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, snackbar = snackbar)
     } else if (settings) {
         BackHandler { settings = false }
         SettingsScreen(
