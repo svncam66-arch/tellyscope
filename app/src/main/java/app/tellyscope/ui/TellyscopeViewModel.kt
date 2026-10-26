@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import okio.Buffer
 import okio.buffer
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -146,6 +147,8 @@ data class UiState(
     val update: Update? = null,
     /** The Apps tabs whose System section the user folded away. */
     val foldedSystem: Set<AppsTab> = emptySet(),
+    /** Only authenticated backup section names; sensitive contents remain private to the ViewModel. */
+    val backupEntries: Set<String> = emptySet(),
 ) {
     val selected: Device? get() = devices.firstOrNull { it.id == selectedId }
 }
@@ -203,6 +206,7 @@ class TellyscopeViewModel(
     private val transfers = ConcurrentHashMap<String, TransferUi>() // progress arrives off the main thread
     /** History entries being undone, so a second tap can't run the same Undo again. */
     private val undoInFlight = mutableSetOf<Long>()
+    private var pendingBackupPreview: EncryptedLocalBackup.Preview? = null
     private var liveJob: Job? = null
     private var mediumJob: Job? = null
     private var probeJob: Job? = null
@@ -572,6 +576,78 @@ class TellyscopeViewModel(
                 passphrase.fill('\u0000')
             }
         }
+    }
+
+    /**
+     * Decrypt and validate a user-selected local backup, then ask which individual
+     * sections may be restored. Import never applies changes immediately.
+     */
+    fun previewLocalBackup(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val storage = storage
+        if (storage == null || backupDir == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Восстановление недоступно."
+            return
+        }
+        pendingBackupPreview = null
+        _state.update { it.copy(backupEntries = emptySet()) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val source = storage.open(uri)
+                require(source.size == null || source.size <= 8_000_100L) {
+                    "Файл резервной копии слишком велик."
+                }
+                val buffer = Buffer()
+                source.source.use { input ->
+                    while (true) {
+                        val n = input.read(buffer, 8192L)
+                        if (n < 0) break
+                        require(buffer.size <= 8_000_100L) { "Файл резервной копии слишком велик." }
+                    }
+                }
+                val preview = EncryptedLocalBackup.preview(buffer.readByteArray(), passphrase)
+                pendingBackupPreview = preview
+                _state.update { it.copy(backupEntries = preview.names) }
+                _notice.value = if (preview.names.isEmpty()) "Резервная копия не содержит доступных разделов."
+                    else "Резервная копия проверена. Выберите разделы для восстановления."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                pendingBackupPreview = null
+                _notice.value = "Не удалось открыть копию. Проверьте пароль, формат и целостность файла."
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+    }
+
+    /** Applies only the checked sections from an authenticated backup. The app must then restart. */
+    fun restoreLocalBackup(selected: Set<String>) {
+        val dir = backupDir ?: return
+        val preview = pendingBackupPreview ?: return
+        if (selected.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val restored = EncryptedLocalBackup.restorePreview(dir, preview, selected)
+                _notice.value = "Восстановлено разделов: ${restored.size}. Перезапустите приложение для обновления данных."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Восстановление прервано. Проверьте данные после перезапуска."
+            } finally {
+                pendingBackupPreview = null
+                _state.update { it.copy(backupEntries = emptySet()) }
+            }
+        }
+    }
+
+    fun cancelLocalBackupRestore() {
+        pendingBackupPreview = null
+        _state.update { it.copy(backupEntries = emptySet()) }
     }
 
     /** Saves a local, privacy-aware diagnostic report through Android's document picker. */
