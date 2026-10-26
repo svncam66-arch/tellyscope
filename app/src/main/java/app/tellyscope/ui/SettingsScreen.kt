@@ -91,7 +91,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("Настройки") },
                 navigationIcon = {
                     IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to the TV's page") }
                 },
@@ -112,10 +112,10 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Check for updates", style = MaterialTheme.typography.titleSmall)
+                            Text("Проверять обновления", style = MaterialTheme.typography.titleSmall)
                             Text(
-                                (if (alphaBuild) "Every 5 minutes on alpha builds" else "Every 30 minutes") +
-                                    ", ask GitHub whether a newer Tellyscope is out. Nothing is downloaded.",
+                                (if (alphaBuild) "Каждые 5 минут в экспериментальных сборках" else "Каждые 30 минут") +
+                                    ", проверять наличие новой версии на GitHub. Автоматическая загрузка не выполняется.",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
@@ -130,7 +130,7 @@ fun SettingsScreen(
                         .padding(horizontal = 4.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Advanced", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text("Дополнительно", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                     Icon(if (advanced) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null)
                 }
             }
@@ -139,20 +139,20 @@ fun SettingsScreen(
                     ListsFrom(listSource, onOpen = { open(CLEANYOURTV) })
                     HorizontalDivider(color = MaterialTheme.colorScheme.surface)
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Change", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Изменить источник", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
-                            "Paste the HTTPS raw folder that holds index.json, e.g. raw.githubusercontent.com/<you>/tellyscope-devices/main/",
+                            "Укажите HTTPS-адрес каталога с index.json, например raw.githubusercontent.com/<you>/tellyscope-devices/main/",
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         Row(Modifier.clickable { open(OWN_LISTS_GUIDE) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("How to use your own lists", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            Text("Как использовать свои списки", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(4.dp))
                             Icon(OpenInNew, contentDescription = null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.surface)
                     Row(Modifier.fillMaxWidth().clickable { editing = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Use your own debloat lists", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Text("Собственные списки оптимизации", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                 }
@@ -173,7 +173,7 @@ private fun ListsFrom(source: String?, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Lists from", style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant)
+            Text("Источник рекомендаций", style = MaterialTheme.typography.labelMedium, color = c.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (source == null) "cleanyourtv" else sourceName(source), style = MaterialTheme.typography.titleMedium)
                 if (source == null) {
@@ -183,7 +183,7 @@ private fun ListsFrom(source: String?, onOpen: () -> Unit) {
                 }
             }
         }
-        if (source == null) Icon(OpenInNew, contentDescription = "Open cleanyourtv on GitHub", tint = c.onSurfaceVariant)
+        if (source == null) Icon(OpenInNew, contentDescription = "Открыть cleanyourtv на GitHub", tint = c.onSurfaceVariant)
     }
 }
 
@@ -200,19 +200,19 @@ private fun SourceDialog(source: String?, onSave: (String?) -> Unit, onDismiss: 
     var url by rememberSaveable { mutableStateOf(source.orEmpty()) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Where the lists come from") },
+        title = { Text("Источник списков рекомендаций") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "To use your own lists, fork tellyscope-devices, edit it, and paste the address of the folder that holds index.json, " +
-                        "like https://raw.githubusercontent.com/you/tellyscope-devices/main/. Protected apps stay protected whatever a list says.",
+                     "Чтобы использовать свои списки, создайте ответвление tellyscope-devices и укажите адрес каталога с index.json, " +
+                        "например https://raw.githubusercontent.com/you/tellyscope-devices/main/. Системная защита действует независимо от рекомендаций.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(url, { url = it }, placeholder = { Text("https://…") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (source != null) TextButton(onClick = { onSave(null) }) { Text("Reset to default") }
+                if (source != null) TextButton(onClick = { onSave(null) }) { Text("Вернуть стандартный источник") }
             }
         },
-        confirmButton = { Button(onClick = { onSave(url) }, enabled = url.isNotBlank()) { Text("Use these lists") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { Button(onClick = { onSave(url) }, enabled = url.isNotBlank()) { Text("Использовать списки") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
