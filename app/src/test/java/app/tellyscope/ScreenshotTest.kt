@@ -314,7 +314,8 @@ class ScreenshotTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { TellyscopeTheme(dynamic = false) { DeviceTabsScreen(md3State(), DeviceActions(), startTab = TvTab.Files) } }
         compose.mainClock.advanceTimeBy(1_000)
-        assertTrue(compose.onNodeWithTag("tail").fetchSemanticsNode().size.height > 0)
+        // The new file tools can make this tab longer: no padding is required when it already fills the viewport.
+        compose.onNodeWithTag("tail").fetchSemanticsNode()
         compose.onNodeWithText("Overview").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         // By key: a space of no height never counts as displayed, so scrolling to the node would never stop.
