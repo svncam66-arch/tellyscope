@@ -48,9 +48,13 @@ object EncryptedLocalBackup {
         Preview(decode(EncryptedBackupCodec.decrypt(data, password)))
 
     /** Caller must explicitly select entries; defaults to none, not all. */
-    fun restore(filesDir: File, backup: ByteArray, password: CharArray, selected: Set<String>): Set<String> {
+    fun restore(filesDir: File, backup: ByteArray, password: CharArray, selected: Set<String>): Set<String> =
+        restorePreview(filesDir, preview(backup, password), selected)
+
+    /** Restore from an already authenticated decrypted preview; never from arbitrary untrusted bytes. */
+    fun restorePreview(filesDir: File, preview: Preview, selected: Set<String>): Set<String> {
         require(filesDir.isDirectory) { "Недоступен каталог приложения." }
-        val records = preview(backup, password).contents
+        val records = preview.contents
         require(selected.all { it in includedFiles && it in records }) { "Выбран неизвестный раздел архива." }
         val completed = linkedSetOf<String>()
         for (name in selected) {
