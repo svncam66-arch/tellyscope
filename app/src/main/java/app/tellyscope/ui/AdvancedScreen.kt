@@ -111,7 +111,7 @@ fun AdvancedScreen(
             } else {
                 item {
                     Text(
-                        if (offline) Copy.noStats(device.state) else "Загрузка статистики…",
+                        if (offline) "Устройство не в сети. Статистика появится после подключения." else "Загрузка статистики…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
