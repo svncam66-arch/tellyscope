@@ -325,7 +325,7 @@ class ScreenshotTest {
     private fun emptyFiles() = md3State().let { it.copy(device = it.device.copy(files = FilesUi(TvFolder.DOWNLOAD, emptyList()))) }
     @Test fun md3_files_empty() {
         shot("76_md3_files_empty") { DeviceTabsScreen(emptyFiles(), DeviceActions(), startTab = TvTab.Files) }
-        compose.onNodeWithText("Nothing in Download yet").assertIsDisplayed()
+        compose.onNodeWithText("Папка пуста. Можно создать новую папку или отправить сюда файл.").assertIsDisplayed()
         // The save hint is only for files there are.
         compose.onNodeWithText("Tap a file to save a copy on your phone.").assertDoesNotExist()
     }
