@@ -186,6 +186,14 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
         exportPassphrase = null
         vm.exportLocalBackup(uri, pwd)
     }
+    var exportAdbPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportAdbIdentity = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val pwd = exportAdbPassphrase
+        exportAdbPassphrase = null
+        vm.exportAdbIdentity(uri, pwd)
+    }
     var importPassphrase by remember { mutableStateOf<CharArray?>(null) }
     val importBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -259,6 +267,11 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
                 importPassphrase?.fill('\u0000')
                 importPassphrase = pwd
                 importBackup.launch(arrayOf("*/*"))
+            },
+            onExportAdbIdentity = { pwd ->
+                exportAdbPassphrase?.fill('\u0000')
+                exportAdbPassphrase = pwd
+                exportAdbIdentity.launch("tv-optimizer-adb-identity-encrypted.tvopkey")
             },
             backupEntries = state.backupEntries,
             onRestoreBackup = vm::restoreLocalBackup,
