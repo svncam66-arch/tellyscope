@@ -362,8 +362,13 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     override suspend fun importVerifiedProfile(
         deviceId: String, jsonBytes: ByteArray, signature: ByteArray,
     ): SignedProfilePolicy.Verdict {
-        val current = knownFirmware[deviceId] ?: probeCapabilities(deviceId)
+        val current = probeCapabilities(deviceId)
         return trustedProfiles.import(jsonBytes, signature, current)
+    }
+
+    override suspend fun rollbackVerifiedProfile(deviceId: String): SignedProfilePolicy.Verdict {
+        val current = probeCapabilities(deviceId)
+        return trustedProfiles.rollback(current)
     }
 
     override suspend fun apps(deviceId: String): List<AppInfo> {
