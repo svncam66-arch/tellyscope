@@ -248,7 +248,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             vm.showStats(StatsProfile.ADVANCED)
             onDispose { vm.showStats(StatsProfile.OTHER) }
         }
-        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, onMeasure = vm::measurePerformance, onImportProfile = { pickSignedProfile.launch(arrayOf("*/*")) }, snackbar = snackbar)
+        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, onMeasure = vm::measurePerformance, onImportProfile = { pickSignedProfile.launch(arrayOf("*/*")) }, onRollbackProfile = vm::rollbackSignedProfile, snackbar = snackbar)
     } else if (settings) {
         BackHandler { settings = false }
         SettingsScreen(
