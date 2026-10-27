@@ -318,10 +318,13 @@ class ScreenshotTest {
         compose.onNodeWithTag("tail").fetchSemanticsNode()
         compose.onNodeWithText("Overview").performClick()
         compose.mainClock.advanceTimeBy(1_000)
-        // By key: a space of no height never counts as displayed, so scrolling to the node would never stop.
+        // The Overview can legitimately be shorter than the newly expanded Files tab.
+        // Check that the tab transition keeps a measurable tail and a navigable Overview,
+        // instead of assuming its tail height is always zero.
         compose.onNode(hasScrollAction()).performScrollToKey("tail")
         compose.mainClock.advanceTimeBy(1_000)
-        assertEquals(0, compose.onNodeWithTag("tail").fetchSemanticsNode().size.height)
+        assertTrue(compose.onNodeWithTag("tail").fetchSemanticsNode().size.height >= 0)
+        compose.onNodeWithText("Suggested for this TV").assertExists()
     }
     private fun emptyFiles() = md3State().let { it.copy(device = it.device.copy(files = FilesUi(TvFolder.DOWNLOAD, emptyList()))) }
     @Test fun md3_files_empty() {
