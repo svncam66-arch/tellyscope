@@ -90,6 +90,14 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     /** Wireless debugging advertises pairing and connect on different ports. */
     private val pairingPorts = ConcurrentHashMap<String, Int>()
     private val book = HistoryBook(File(appContext.filesDir, "history.tsv"))
+    private val knownFirmware = ConcurrentHashMap<String, DeviceCapabilities>()
+    private val trustedProfiles by lazy {
+        val pinnedKey = runCatching {
+            appContext.assets.open("owner_profile_public_key.base64").bufferedReader().use { it.readText().trim() }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        VerifiedProfileStore(File(appContext.filesDir, "verified-profiles"), pinnedKey)
+    }
+
     private val names = NameBook(File(appContext.filesDir, "names.tsv"))
     /** Last label seen per package, so history entries read like the app list. */
     private val labels = ConcurrentHashMap<String, String>()
@@ -335,7 +343,7 @@ class AdbDeviceSource(context: Context) : DeviceSource {
             val result = shell.shell("getprop $key")
             return if (result.exitCode == 0) CapabilityProperties.value(result.output) else null
         }
-        return DeviceCapabilities(
+        val capabilities = DeviceCapabilities(
             manufacturer = prop("ro.product.manufacturer"),
             model = prop("ro.product.model"),
             androidVersion = prop("ro.build.version.release"),
@@ -344,6 +352,15 @@ class AdbDeviceSource(context: Context) : DeviceSource {
             firmwareFingerprint = prop("ro.build.fingerprint"),
             detectedAt = System.currentTimeMillis(),
         )
+        knownFirmware[deviceId] = capabilities
+        return capabilities
+    }
+
+    override suspend fun importVerifiedProfile(
+        deviceId: String, jsonBytes: ByteArray, signature: ByteArray,
+    ): SignedProfilePolicy.Verdict {
+        val current = knownFirmware[deviceId] ?: probeCapabilities(deviceId)
+        return trustedProfiles.import(jsonBytes, signature, current)
     }
 
     override suspend fun apps(deviceId: String): List<AppInfo> {
@@ -359,6 +376,13 @@ class AdbDeviceSource(context: Context) : DeviceSource {
         // Same key as history: a placeholder serial must not give two boxes one cache.
         val names = appNames.names(key(deviceId), listed, LabelHelper(shell, helperDex)::describe)
         val keep = keep[key(deviceId)].orEmpty()
+        // No trust root or no exact firmware = NO recovery permission.
+        val signed = knownFirmware[deviceId]?.let { trustedProfiles.current(it) }
+            as? SignedProfilePolicy.Verdict.Accepted
+        val restoreVerified = signed?.profile?.actions
+            ?.filter { it.operation == "disable" && it.recovery == "enable" }
+            ?.map { it.packageName }?.toSet().orEmpty()
+
         // On a launcher the user added, offer the way back to the one it replaced.
         val back = homeOptions?.current?.takeIf { it !in system }
             ?.let { homeBackTarget(it, book.entries(key(deviceId)), builtIns(system, disabled, homeOptions)) }
@@ -386,6 +410,8 @@ class AdbDeviceSource(context: Context) : DeviceSource {
                 homeBack = back?.takeIf { p.name == homeOptions?.current }?.let { names[it.pkg]?.label ?: AppNames.fallback(it.pkg) },
                 homeService = p.name in serviceLaunchers,
                 listKeep = p.name in keep,
+                verifiedRestorePath = p.name in restoreVerified,
+
             )
         }.sortedBy { it.label.lowercase() }
     }
