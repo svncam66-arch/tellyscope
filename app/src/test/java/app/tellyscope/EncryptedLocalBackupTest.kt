@@ -42,6 +42,40 @@ class EncryptedLocalBackupTest {
         }
     }
 
+    @Test fun preflightRejectsBlockedTargetWithoutChangingAnySelectedFiles() {
+        val source = files.newFolder("staged")
+        File(source, "history.tsv").writeText("history after")
+        File(source, "devices.tsv").writeText("devices after")
+        val password = "надёжный-длинный-пароль".toCharArray()
+        val archive = EncryptedLocalBackup.export(source, password)
+        val target = files.newFolder("existing")
+        File(target, "history.tsv").writeText("history before")
+        File(target, "devices.tsv").mkdir()
+        assertThrows(IllegalArgumentException::class.java) {
+            EncryptedLocalBackup.restore(target, archive, password, setOf("history.tsv", "devices.tsv"))
+        }
+        assertEquals("history before", File(target, "history.tsv").readText())
+        assertTrue(File(target, "devices.tsv").isDirectory)
+    }
+
+    @Test fun successfulMultisectionRestoreReplacesOnlyApprovedEntries() {
+        val source = files.newFolder("selected_source")
+        File(source, "history.tsv").writeText("restored history")
+        File(source, "devices.tsv").writeText("restored devices")
+        val password = "надёжный-длинный-пароль".toCharArray()
+        val backup = EncryptedLocalBackup.export(source, password)
+        val target = files.newFolder("selected_target")
+        File(target, "history.tsv").writeText("old history")
+        File(target, "devices.tsv").writeText("old devices")
+        File(target, "names.tsv").writeText("keep this")
+        assertEquals(setOf("history.tsv", "devices.tsv"),
+            EncryptedLocalBackup.restore(target, backup, password, setOf("history.tsv", "devices.tsv")))
+        assertEquals("restored history", File(target, "history.tsv").readText())
+        assertEquals("restored devices", File(target, "devices.tsv").readText())
+        assertEquals("keep this", File(target, "names.tsv").readText())
+        assertFalse(target.listFiles().orEmpty().any { it.name.startsWith(".tvop-") })
+    }
+
     @Test fun wrongPasswordNeverProducesPreview() {
         val original = files.newFolder("source")
         val archive = EncryptedLocalBackup.export(original, "секретный-длинный-пароль".toCharArray())
