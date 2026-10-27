@@ -72,6 +72,7 @@ fun AdvancedScreen(
     onExportReport: () -> Unit = {},
     onMeasure: (Boolean) -> Unit = {},
     onImportProfile: () -> Unit = {},
+    onRollbackProfile: () -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val device = state.selected ?: return
@@ -121,6 +122,10 @@ fun AdvancedScreen(
                         Button(onClick = onImportProfile, enabled = !offline) {
                             Text("Импорт подписанного профиля")
                         }
+                        TextButton(
+                            onClick = onRollbackProfile,
+                            enabled = !offline && ui.signedProfileLabel != null,
+                        ) { Text("Откатить профиль к предыдущей проверенной версии") }
                         listOfNotNull(
                             "IP-адрес" to device.hit.ip,
                             "Порт" to device.hit.port.toString(),
