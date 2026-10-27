@@ -93,7 +93,10 @@ class MainActivity : ComponentActivity() {
                                     TellyscopeViewModel(
                                         scenario?.let(::FakeDeviceSource) ?: AdbDeviceSource(applicationContext),
                                         AndroidPhoneStorage(applicationContext),
-                                        updates = if (scenario != null) null else updateCheck(),
+                                        // An experimental APK cannot safely upgrade itself using
+                                        // legacy Tellyscope release assets or mismatched signatures.
+                                        updates = if (scenario != null || packageName.endsWith(".experimental")) null
+                                            else updateCheck(),
                                         folds = FoldBook(File(filesDir, "folds.properties")),
                                         backupDir = filesDir,
                                     )
@@ -110,7 +113,7 @@ class MainActivity : ComponentActivity() {
     private fun updateCheck(): UpdateCheck {
         @Suppress("DEPRECATION") // the flags overload is API 33+
         val version = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
-        // Alpha builds install as app.tellyscope.alpha (app/build.gradle.kts).
+        // Production update validation must verify target package/signature before installation.
         return UpdateCheck(File(filesDir, "updates.properties"), version, alpha = packageName.endsWith(".alpha"))
     }
 
