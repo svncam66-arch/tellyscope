@@ -32,8 +32,13 @@ android {
         }
     }
 
-    // Only CI signs, from repo secrets; without RELEASE_KEYSTORE the release APK is unsigned.
-    val keystore = providers.environmentVariable("RELEASE_KEYSTORE").orNull
+    // TV Optimizer Pro stable signing is only authorized on the owner's local machine.
+    // CI and ordinary builds MUST NEVER acquire a stable signing identity.
+    val allowLocalReleaseSigning =
+        providers.gradleProperty("tvoptimizer.localReleaseSigning").orNull == "true" &&
+            providers.environmentVariable("CI").orNull != "true"
+    val keystore = if (allowLocalReleaseSigning)
+        providers.environmentVariable("RELEASE_KEYSTORE").orNull else null
     signingConfigs {
         if (keystore != null) {
             create("release") {
