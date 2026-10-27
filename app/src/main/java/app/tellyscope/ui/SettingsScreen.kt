@@ -242,6 +242,7 @@ fun SettingsScreen(
                                 backupPassword = ""
                                 backupPasswordDialog = true
                             }) { Text("Восстановить из зашифрованной копии") }
+                        }
                         if (onExportAdbIdentity != null) {
                             TextButton(onClick = {
                                 backupMode = "adb"
@@ -249,7 +250,6 @@ fun SettingsScreen(
                                 backupVisible = false
                                 backupPasswordDialog = true
                             }) { Text("Отдельно экспортировать ключ ADB (с предупреждением)") }
-                        }
                         }
                     }
                 }
