@@ -740,6 +740,33 @@ class TellyscopeViewModel(
         _state.update { it.copy(backupEntries = emptySet()) }
     }
 
+    /** Manual signed-profile rollback. Does not revert any previously changed TV packages. */
+    fun rollbackSignedProfile() {
+        val device = _state.value.selected ?: return
+        if (device.state != DeviceState.Online) return
+        val id = device.id
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                when (val result = source.rollbackVerifiedProfile(id)) {
+                    is SignedProfilePolicy.Verdict.Accepted -> {
+                        val apps = source.apps(id)
+                        updateDevice(id) { it.copy(
+                            signedProfileLabel = "${result.profile.id} (rev. ${result.profile.revision})",
+                            apps = apps,
+                        ) }
+                        _notice.value = "Возвращена предыдущая подписанная версия профиля. Уже отключённые приложения автоматически не меняются."
+                    }
+                    is SignedProfilePolicy.Verdict.Rejected ->
+                        _notice.value = "Откат профиля не выполнен: ${result.reason}"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Не удалось выполнить откат профиля. Состояние ТВ не изменено."
+            }
+        }
+    }
+
     /**
      * Import two user-picked files, JSON and detached RSA signature. No profile is
      * trusted unless the owner public key is pinned in this build and exact firmware
