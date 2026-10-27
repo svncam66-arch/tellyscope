@@ -172,6 +172,9 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream"), vm::saveTo)
     val saveScreenshot = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"), vm::screenshotTo)
     val saveDiagnosticReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain"), vm::saveDiagnosticReport)
+    val pickSignedProfile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(), vm::importSignedProfile,
+    )
     var exportPassphrase by remember { mutableStateOf<CharArray?>(null) }
     val exportBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
@@ -234,7 +237,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             vm.showStats(StatsProfile.ADVANCED)
             onDispose { vm.showStats(StatsProfile.OTHER) }
         }
-        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, onMeasure = vm::measurePerformance, snackbar = snackbar)
+        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, onMeasure = vm::measurePerformance, onImportProfile = { pickSignedProfile.launch(arrayOf("*/*")) }, snackbar = snackbar)
     } else if (settings) {
         BackHandler { settings = false }
         SettingsScreen(
