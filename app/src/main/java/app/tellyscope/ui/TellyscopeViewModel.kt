@@ -25,6 +25,7 @@ import app.tellyscope.data.DeviceSource
 import app.tellyscope.data.DeviceCapabilities
 import app.tellyscope.data.SignedProfilePolicy
 import app.tellyscope.data.EncryptedLocalBackup
+import app.tellyscope.data.EncryptedAdbKeyBackup
 import app.tellyscope.data.DeviceState
 import app.tellyscope.data.HistoryEntry
 import app.tellyscope.data.NetworkInfo
@@ -604,6 +605,40 @@ class TellyscopeViewModel(
      * Only known app metadata is included. ADB keys and downloaded profiles are excluded.
      * The password char array is cleared after the I/O attempt.
      */
+    /**
+     * Explicitly exports only the ADB identity as a separately password-encrypted file.
+     * Never include this identity in normal history/settings backups or diagnostic reports.
+     * This export alone does not fix the inherited live Kadb key-at-rest design.
+     */
+    fun exportAdbIdentity(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val dir = backupDir
+        val out = storage
+        if (dir == null || out == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Экспорт ключа ADB недоступен."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val encrypted = EncryptedAdbKeyBackup.export(dir, passphrase)
+                out.create(uri).buffer().use { it.write(encrypted) }
+                _notice.value = "Ключ ADB сохранён в зашифрованном виде. Храните его и пароль отдельно."
+            } catch (e: CancellationException) {
+                out.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                out.delete(uri)
+                _notice.value = "Не удалось экспортировать ключ ADB. Проверьте пароль и наличие ключа."
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+    }
+
     fun exportLocalBackup(uri: Uri?, passphrase: CharArray?) {
         if (uri == null || passphrase == null) {
             passphrase?.fill('\u0000')
