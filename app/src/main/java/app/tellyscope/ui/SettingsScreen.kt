@@ -83,6 +83,7 @@ fun SettingsScreen(
     back: () -> Unit,
     onExportBackup: ((CharArray) -> Unit)? = null,
     onImportBackup: ((CharArray) -> Unit)? = null,
+    onExportAdbIdentity: ((CharArray) -> Unit)? = null,
     backupEntries: Set<String> = emptySet(),
     onRestoreBackup: (Set<String>) -> Unit = {},
     onCancelBackupRestore: () -> Unit = {},
@@ -103,15 +104,17 @@ fun SettingsScreen(
     if (backupPasswordDialog) {
         AlertDialog(
             onDismissRequest = { backupPassword = ""; backupPasswordDialog = false },
-            title = { Text("Зашифрованная резервная копия") },
+            title = { Text(if (backupMode == "adb") "Экспорт личного ключа ADB" else "Зашифрованная резервная копия") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (backupMode == "export")
-                        "Сохраняются локальные сведения об устройствах, история и настройки. Ключи ADB в копию не включаются."
-                    else "Выберите зашифрованный файл и введите его пароль. После проверки вы сможете выбрать разделы восстановления.")
-                    Text(if (backupMode == "export")
-                        "Придумайте отдельный пароль длиной не менее 12 символов и храните его надёжно."
-                    else "Введите пароль, с которым файл был создан.")
+                    Text(when (backupMode) {
+                        "adb" -> "Внимание: ключ ADB даёт возможность авторизоваться на сопряжённых телевизорах. Экспортируйте его только лично, храните отдельно от пароля и никогда не отправляйте в чат или GitHub."
+                        "export" -> "Сохраняются локальные сведения об устройствах, история и настройки. Ключи ADB в копию не включаются."
+                        else -> "Выберите зашифрованный файл и введите его пароль. После проверки вы сможете выбрать разделы восстановления."
+                    })
+                    Text(if (backupMode == "import") "Введите пароль, с которым файл был создан."
+                    else if (backupMode == "adb") "Используйте новый ОТДЕЛЬНЫЙ пароль от 12 символов, не пароль обычных резервных копий."
+                    else "Придумайте отдельный пароль длиной не менее 12 символов и храните его надёжно.")
                     OutlinedTextField(
                         value = backupPassword,
                         onValueChange = { backupPassword = it },
@@ -129,15 +132,18 @@ fun SettingsScreen(
             },
             confirmButton = {
                 Button(
-                    enabled = if (backupMode == "export") backupPassword.length >= 12 else backupPassword.isNotEmpty(),
+                    enabled = if (backupMode == "import") backupPassword.isNotEmpty() else backupPassword.length >= 12,
                     onClick = {
                         val password = backupPassword.toCharArray()
                         backupPassword = ""
                         backupPasswordDialog = false
-                        if (backupMode == "export") onExportBackup?.invoke(password)
-                        else onImportBackup?.invoke(password)
+                        when (backupMode) {
+                            "export" -> onExportBackup?.invoke(password)
+                            "adb" -> onExportAdbIdentity?.invoke(password)
+                            else -> onImportBackup?.invoke(password)
+                        }
                     },
-                ) { Text(if (backupMode == "export") "Выбрать место сохранения" else "Выбрать файл копии") }
+                ) { Text(if (backupMode == "import") "Выбрать файл копии" else "Выбрать место сохранения") }
             },
             dismissButton = {
                 TextButton(onClick = { backupPassword = ""; backupPasswordDialog = false }) { Text("Отмена") }
@@ -236,6 +242,14 @@ fun SettingsScreen(
                                 backupPassword = ""
                                 backupPasswordDialog = true
                             }) { Text("Восстановить из зашифрованной копии") }
+                        if (onExportAdbIdentity != null) {
+                            TextButton(onClick = {
+                                backupMode = "adb"
+                                backupPassword = ""
+                                backupVisible = false
+                                backupPasswordDialog = true
+                            }) { Text("Отдельно экспортировать ключ ADB (с предупреждением)") }
+                        }
                         }
                     }
                 }
