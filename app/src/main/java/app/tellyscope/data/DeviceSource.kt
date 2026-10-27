@@ -65,6 +65,14 @@ interface DeviceSource {
      */
     suspend fun probeCapabilities(deviceId: String): DeviceCapabilities? = null
 
+    /**
+     * Manual import of a detached owner-signed profile. Sources without trusted
+     * owner key deliberately reject it; a community list is never automatically approved.
+     */
+    suspend fun importVerifiedProfile(deviceId: String, jsonBytes: ByteArray, signature: ByteArray): SignedProfilePolicy.Verdict =
+        SignedProfilePolicy.Verdict.Rejected("Импорт подписанных профилей недоступен.")
+
+
 
     /**
      * Runs an action and records it. Uninstall runs only on apps the user installed, and has no
