@@ -193,6 +193,8 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun reconnect(deviceId: String) {
         restored.await()
+        // A different firmware or TV may appear behind the same IP after reconnect.
+        knownFirmware.remove(deviceId)
         links[deviceId]?.connect()
     }
 
@@ -203,6 +205,7 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun forget(deviceId: String) {
         restored.await()
+        knownFirmware.remove(deviceId)
         watchers.remove(deviceId)?.cancel()
         keyHelpers.remove(deviceId)?.close()
         links.remove(deviceId)?.disconnect()
@@ -457,6 +460,12 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     private suspend fun actNow(deviceId: String, action: Action, packageName: String, undoing: Long?): HistoryEntry {
         // Source-level fail-closed preflight: protects other callers, not only Compose UI.
         if (action in setOf(Action.Stop, Action.Disable, Action.Uninstall)) {
+            // Never reuse cached firmware authorization for a system disable.
+            // ADB property reads must succeed at write time before checking a signed profile.
+            if (action == Action.Disable) {
+                val now = probeCapabilities(deviceId)
+                require(now.exactFirmwareKnown) { "Прошивка не определена; отключение запрещено." }
+            }
             val current = apps(deviceId).firstOrNull { it.packageName == packageName }
             PackageActionPolicy.refusal(current, action)?.let { throw IllegalStateException(it) }
         }
