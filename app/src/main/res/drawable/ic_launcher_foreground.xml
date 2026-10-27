@@ -1,39 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A telescope whose wide end is a TV screen. The art is scaled to 72% about the centre so it stays inside the 66 dp safe zone. -->
+<!-- Original TV Optimizer Pro artwork. All details stay in the adaptive-icon safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <group android:translateX="51" android:translateY="56">
-        <group android:scaleX="0.72" android:scaleY="0.72">
-            <group android:translateX="-54" android:translateY="-54">
-                <!-- Stand -->
-                <path
-                    android:strokeColor="#FFFFFFFF"
-                    android:strokeWidth="4.5"
-                    android:strokeLineCap="round"
-                    android:pathData="M50,62L40,84M50,62L60,84" />
-                <group android:rotation="-30" android:pivotX="54" android:pivotY="54">
-                    <!-- Eyepiece -->
-                    <path
-                        android:fillColor="#FFFFFFFF"
-                        android:pathData="M18.5,50h4a2.5,2.5 0,0 1,2.5 2.5v4a2.5,2.5 0,0 1,-2.5 2.5h-4a2.5,2.5 0,0 1,-2.5 -2.5v-4a2.5,2.5 0,0 1,2.5 -2.5z" />
-                    <!-- Tube -->
-                    <path
-                        android:fillColor="#FFFFFFFF"
-                        android:strokeColor="#FFFFFFFF"
-                        android:strokeWidth="3"
-                        android:strokeLineJoin="round"
-                        android:pathData="M28,49.5L52,46v17l-24,-3.5z" />
-                    <!-- Screen -->
-                    <path
-                        android:fillColor="#FF9CF1F2"
-                        android:strokeColor="#FFFFFFFF"
-                        android:strokeWidth="5"
-                        android:pathData="M63.5,40h21a4.5,4.5 0,0 1,4.5 4.5v20a4.5,4.5 0,0 1,-4.5 4.5h-21a4.5,4.5 0,0 1,-4.5 -4.5v-20a4.5,4.5 0,0 1,4.5 -4.5z" />
-                </group>
-            </group>
-        </group>
-    </group>
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- TV frame -->
+    <path
+        android:fillColor="#00123C2D"
+        android:strokeColor="#E0BC70"
+        android:strokeWidth="4"
+        android:strokeLineJoin="round"
+        android:pathData="M30,35 Q27,35 27,39 L27,68 Q27,72 31,72 L77,72 Q81,72 81,68 L81,39 Q81,35 77,35 Z" />
+    <!-- Optimization / performance pulse -->
+    <path
+        android:strokeColor="#F3E5BF"
+        android:strokeWidth="3.3"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:pathData="M36,54 L44,54 L49,45 L55,63 L61,51 L66,54 L72,54" />
+    <!-- Television stand -->
+    <path
+        android:strokeColor="#E0BC70"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,73 L54,81 M43,81 L65,81" />
 </vector>

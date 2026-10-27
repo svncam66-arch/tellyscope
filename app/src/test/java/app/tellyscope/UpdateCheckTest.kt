@@ -175,7 +175,7 @@ class UpdateCheckTest {
         val lines = dialogNotes(prodBody).lines()
         assertEquals(13, lines.size)
         assertEquals("- **New:** A new app icon: a telescope with a TV screen for a lens.", lines.first())
-        assertEquals("…and more on GitHub", lines.last())
+        assertEquals("…подробнее на GitHub", lines.last())
         assertTrue(lines.none { "](" in it || "Commits" in it })
     }
 

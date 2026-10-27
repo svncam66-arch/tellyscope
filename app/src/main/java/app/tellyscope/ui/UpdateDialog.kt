@@ -27,17 +27,17 @@ import app.tellyscope.data.Update
 fun UpdateDialog(update: Update, onGet: () -> Unit, onLater: () -> Unit, onSkip: () -> Unit) {
     AlertDialog(
         onDismissRequest = onLater,
-        title = { Text("🎉 Tellyscope ${update.version} is out") },
+        title = { Text("Доступно обновление TV Optimizer Pro ${update.version}") },
         text = {
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                Text(boldSpans(dialogNotes(update.notes).ifEmpty { "No release notes." }), style = MaterialTheme.typography.bodyMedium)
+                Text(boldSpans(dialogNotes(update.notes).ifEmpty { "Описание изменений отсутствует." }), style = MaterialTheme.typography.bodyMedium)
             }
         },
-        confirmButton = { Button(onClick = onGet) { Text("Get it") } },
+        confirmButton = { Button(onClick = onGet) { Text("Открыть обновление") } },
         dismissButton = {
             Row {
-                TextButton(onClick = onSkip) { Text("Skip this version") }
-                TextButton(onClick = onLater) { Text("Later") }
+                TextButton(onClick = onSkip) { Text("Пропустить версию") }
+                TextButton(onClick = onLater) { Text("Позже") }
             }
         },
     )
@@ -51,7 +51,7 @@ internal fun dialogNotes(body: String, max: Int = 12): String {
     val lines = body.substringBefore("### Commits").lines()
         .map { it.replace("`", "").replace(PR_LINK, "").trimEnd() }
         .filter { it.isNotBlank() }
-    return (if (lines.size > max) lines.take(max) + "…and more on GitHub" else lines).joinToString("\n")
+    return (if (lines.size > max) lines.take(max) + "…подробнее на GitHub" else lines).joinToString("\n")
 }
 
 private val PR_LINK = Regex("""\s*\[#\d+]\([^)]*\)\s*$""")

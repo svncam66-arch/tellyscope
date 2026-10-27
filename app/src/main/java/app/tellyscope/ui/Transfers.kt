@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -140,39 +141,150 @@ internal val Broom = ImageVector.Builder("Broom", 24.dp, 24.dp, 24f, 24f)
     )
     .build()
 
-/** Body of the Files tab, under its folder tabs: the folder's files, each one tap from the phone. */
+/** Browses only verified directories under the TV's public Download / Movies roots. */
 @Composable
-fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions) {
-    val list = files.list
-    when {
-        list == null -> Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
-            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-            LoadingIndicator(Modifier.size(32.dp))
+fun FilesBlock(files: FilesUi, now: Long, actions: DeviceActions, deviceId: String = "") {
+    var creating by remember(deviceId, files.folder, files.subfolders) { mutableStateOf(false) }
+    var renameTarget by remember(deviceId, files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
+    var deleteTarget by remember(deviceId, files.folder, files.subfolders) { mutableStateOf<TvFile?>(null) }
+    var typedName by remember(deviceId, files.folder, files.subfolders) { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Папка: " + Copy.folder(files.folder) +
+                if (files.subfolders.isEmpty()) "" else " / " + files.subfolders.joinToString(" / "),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (files.subfolders.isNotEmpty()) {
+                TextButton(onClick = actions.parentFolder, enabled = !files.busy) { Text("На уровень выше") }
+            }
+            TextButton(onClick = { typedName = ""; creating = true }, enabled = !files.busy) {
+                Text("Новая папка")
+            }
+            TextButton(onClick = actions.pickFileHere, enabled = !files.busy) { Text("Отправить сюда") }
         }
-        files.error != null -> Muted(files.error)
-        else -> {
-            list.forEach { f -> FileRow(f, now) { actions.saveFile(f) } }
-            // Only with files to tap; an empty folder shows its own page instead.
-            if (list.isNotEmpty()) Muted("Tap a file to save a copy on your phone.")
+        when {
+            files.busy -> Muted("Выполняется файловая операция…")
+            files.error != null -> Muted(files.error)
+            files.list == null -> Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                LoadingIndicator(Modifier.size(32.dp))
+            }
+            files.list.isEmpty() -> Muted("Папка пуста. Можно создать новую папку или отправить сюда файл.")
+            else -> {
+                files.list.forEach { file ->
+                    FileRow(
+                        file,
+                        now,
+                        deviceId = deviceId,
+                        onOpen = { actions.enterFolder(file.name) },
+                        onSave = { actions.saveFile(file) },
+                        onRename = { typedName = file.name; renameTarget = file },
+                        onDelete = { deleteTarget = file },
+                    )
+                }
+                Muted("Для удаления потребуется отдельное подтверждение. Непустые папки не удаляются.")
+            }
         }
+    }
+
+    if (creating || renameTarget != null) {
+        val rename = renameTarget
+        AlertDialog(
+            onDismissRequest = { creating = false; renameTarget = null },
+            title = { Text(if (rename == null) "Создать папку" else "Переименовать") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Изменения выполняются только в общедоступных каталогах телевизора.")
+                    OutlinedTextField(
+                        value = typedName,
+                        onValueChange = { typedName = it },
+                        label = { Text("Имя") },
+                        singleLine = true,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !files.busy && typedName.isNotBlank(),
+                    onClick = {
+                        if (rename == null) actions.createFolder(typedName)
+                        else actions.renameFile(rename, typedName)
+                        creating = false
+                        renameTarget = null
+                    },
+                ) { Text("Подтвердить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { creating = false; renameTarget = null }) { Text("Отмена") }
+            },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text(if (target.isDirectory) "Удалить пустую папку?" else "Удалить файл?") },
+            text = {
+                Text("Выбрано: ${target.name}. Удаление может быть необратимым. Непустые папки удалять запрещено.")
+            },
+            confirmButton = {
+                Button(enabled = !files.busy, onClick = {
+                    deleteTarget = null
+                    actions.deleteFile(target)
+                }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) { Text("Отмена") }
+            },
+        )
     }
 }
 
 @Composable
-private fun FileRow(f: TvFile, now: Long, onSave: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onSave).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(f.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+private fun FileRow(
+    file: TvFile,
+    now: Long,
+    deviceId: String,
+    onOpen: () -> Unit,
+    onSave: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            Modifier.weight(1f).clickable(onClick = if (file.isDirectory) onOpen else onSave),
+        ) {
             Text(
-                "${Copy.bytes(f.size)} · ${Copy.ago(f.modifiedMillis, now)}",
+                if (file.isDirectory) "📁 ${file.name}" else file.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2, overflow = TextOverflow.MiddleEllipsis,
+            )
+            Text(
+                if (file.isDirectory) "Папка" else "${Copy.bytes(file.size)} · ${Copy.ago(file.modifiedMillis, now)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = onSave) { Text("Save") }
+        var menuOpen by remember(deviceId, file.name) { mutableStateOf(false) }
+        TextButton(onClick = if (file.isDirectory) onOpen else onSave) {
+            Text(if (file.isDirectory) "Открыть" else "Скачать")
+        }
+        Box {
+            TextButton(onClick = { menuOpen = true }) { Text("⋮") }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Переименовать") },
+                    onClick = { menuOpen = false; onRename() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Удалить") },
+                    onClick = { menuOpen = false; onDelete() },
+                )
+            }
+        }
     }
 }
 

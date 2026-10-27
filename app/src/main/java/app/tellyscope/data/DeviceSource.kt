@@ -60,6 +60,24 @@ interface DeviceSource {
     suspend fun network(deviceId: String): NetworkInfo
 
     /**
+     * Collects only read-only device firmware facts. null means not available.
+     * No result from this method constitutes an approved optimization profile.
+     */
+    suspend fun probeCapabilities(deviceId: String): DeviceCapabilities? = null
+
+    /**
+     * Manual import of a detached owner-signed profile. Sources without trusted
+     * owner key deliberately reject it; a community list is never automatically approved.
+     */
+    suspend fun importVerifiedProfile(deviceId: String, jsonBytes: ByteArray, signature: ByteArray): SignedProfilePolicy.Verdict =
+        SignedProfilePolicy.Verdict.Rejected("Импорт подписанных профилей недоступен.")
+
+    suspend fun rollbackVerifiedProfile(deviceId: String): SignedProfilePolicy.Verdict =
+        SignedProfilePolicy.Verdict.Rejected("Откат проверенных профилей недоступен.")
+
+
+
+    /**
      * Runs an action and records it. Uninstall runs only on apps the user installed, and has no
      * undo. [undoing] is the history entry this reverses, which gets marked undone.
      */
@@ -86,10 +104,41 @@ interface DeviceSource {
     /** Files in one of the shared folders, newest first. */
     suspend fun files(deviceId: String, folder: TvFolder): List<TvFile>
 
+    /** Shared user folders only; subpaths are validated by the Android/ADB layer. */
+    suspend fun browseFiles(deviceId: String, folder: TvFolder, subfolders: List<String>): List<TvFile> =
+        if (subfolders.isEmpty()) files(deviceId, folder) else emptyList()
+
+    suspend fun createDirectory(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        throw UnsupportedOperationException("Создание папок недоступно на этом устройстве.")
+    }
+    suspend fun renameFile(deviceId: String, folder: TvFolder, subfolders: List<String>, oldName: String, newName: String) {
+        throw UnsupportedOperationException("Переименование недоступно на этом устройстве.")
+    }
+    suspend fun deleteFile(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) {
+        throw UnsupportedOperationException("Удаление недоступно на этом устройстве.")
+    }
+
+
     /** Copies a phone file to the TV without overwriting anything; returns the name it got. */
     suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit): String
 
     suspend fun pull(deviceId: String, folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit)
+
+    /** Transfer inside a verified visible subfolder; unsupported sources fail closed. */
+    suspend fun pushInto(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit,
+    ): String = if (subfolders.isEmpty()) push(deviceId, folder, name, size, source, onProgress)
+        else throw UnsupportedOperationException("Передача в эту папку не поддерживается.")
+
+    suspend fun pullFrom(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        file: TvFile, sink: Sink, onProgress: (Progress) -> Unit,
+    ) {
+        if (subfolders.isEmpty()) pull(deviceId, folder, file, sink, onProgress)
+        else throw UnsupportedOperationException("Скачивание из этой папки не поддерживается.")
+    }
+
 
     /**
      * What the TV's list from tellyscope-devices suggests turning off. Never throws; offline it

@@ -191,14 +191,14 @@ class DeviceListsTest {
         assertEquals(listOf("com.acme.reporter"), shown)
     }
 
-    @Test fun ticksOnlyNonOptionalEntriesAndOnlyOnTheTestedSdk() {
+    @Test fun neverPreselectsEntriesEvenWithMatchingSdk() {
         val list = DeviceList(
             "acme-55", "Acme 55", "Android TV 11", 30, emptySet(),
             listOf(ListGroup("Junk", listOf(ListPackage("com.a.one", null, false), ListPackage("com.a.two", null, true)))),
         )
         val apps = listOf(app("com.a.one"), app("com.a.two"))
         fun ticks(sdk: Int?) = suggest(list, apps, sdk).flatMap { it.packages }.associate { it.pkg to it.ticked }
-        assertEquals(mapOf("com.a.one" to true, "com.a.two" to false), ticks(30))
+        assertEquals(mapOf("com.a.one" to false, "com.a.two" to false), ticks(30))
         assertEquals(mapOf("com.a.one" to false, "com.a.two" to false), ticks(31))
         assertEquals(mapOf("com.a.one" to false, "com.a.two" to false), ticks(null))
         assertEquals(mapOf("com.a.one" to false, "com.a.two" to false), suggest(list.copy(sdk = null), apps, null).flatMap { it.packages }.associate { it.pkg to it.ticked })

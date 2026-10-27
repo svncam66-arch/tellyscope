@@ -22,6 +22,10 @@ import app.tellyscope.data.AppInfo
 import app.tellyscope.data.ConnectResult
 import app.tellyscope.data.Device
 import app.tellyscope.data.DeviceSource
+import app.tellyscope.data.DeviceCapabilities
+import app.tellyscope.data.SignedProfilePolicy
+import app.tellyscope.data.EncryptedLocalBackup
+import app.tellyscope.data.EncryptedAdbKeyBackup
 import app.tellyscope.data.DeviceState
 import app.tellyscope.data.HistoryEntry
 import app.tellyscope.data.NetworkInfo
@@ -38,6 +42,9 @@ import app.tellyscope.data.TvSettings
 import app.tellyscope.data.TvTweaks
 import app.tellyscope.data.Update
 import app.tellyscope.data.FoldBook
+import app.tellyscope.data.PackageActionPolicy
+import app.tellyscope.data.PerformanceLab
+import app.tellyscope.data.PerformanceRun
 import app.tellyscope.data.UpdateCheck
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -46,11 +53,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import okio.Buffer
+import okio.buffer
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** Per-row connect state on the scan screen. */
@@ -76,6 +89,11 @@ data class ScanUi(
 
 data class DeviceUi(
     val snapshot: Snapshot? = null,
+    val capabilities: DeviceCapabilities? = null,
+    val signedProfileLabel: String? = null,
+    val labBefore: PerformanceRun? = null,
+    val labAfter: PerformanceRun? = null,
+    val labBusy: Boolean = false,
     val apps: List<AppInfo> = emptyList(),
     val network: NetworkInfo? = null,
     val history: List<HistoryEntry> = emptyList(),
@@ -117,6 +135,8 @@ data class FilesUi(
     /** Null while loading. */
     val list: List<TvFile>? = null,
     val error: String? = null,
+    val subfolders: List<String> = emptyList(),
+    val busy: Boolean = false,
 )
 
 data class TransferUi(val name: String, val toTv: Boolean, val folder: TvFolder, val progress: Progress? = null)
@@ -140,6 +160,8 @@ data class UiState(
     val update: Update? = null,
     /** The Apps tabs whose System section the user folded away. */
     val foldedSystem: Set<AppsTab> = emptySet(),
+    /** Only authenticated backup section names; sensitive contents remain private to the ViewModel. */
+    val backupEntries: Set<String> = emptySet(),
 ) {
     val selected: Device? get() = devices.firstOrNull { it.id == selectedId }
 }
@@ -170,6 +192,7 @@ class TellyscopeViewModel(
     private val clock: () -> Long = System::currentTimeMillis,
     private val updates: UpdateCheck? = null,
     private val folds: FoldBook? = null,
+    private val backupDir: File? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UiState(now = clock()))
@@ -196,8 +219,11 @@ class TellyscopeViewModel(
     private val transfers = ConcurrentHashMap<String, TransferUi>() // progress arrives off the main thread
     /** History entries being undone, so a second tap can't run the same Undo again. */
     private val undoInFlight = mutableSetOf<Long>()
+    private var pendingBackupPreview: EncryptedLocalBackup.Preview? = null
     private var liveJob: Job? = null
     private var mediumJob: Job? = null
+    private var labJob: Job? = null
+    private var probeJob: Job? = null
     private var listsJob: Job? = null
     private var requestJob: Job? = null
     private var updateJob: Job? = null
@@ -337,9 +363,52 @@ class TellyscopeViewModel(
     /** The TV on screen refreshes at the open screen's rates; the others at the slowest. */
     fun showStats(profile: StatsProfile) = source.showStats(_state.value.selectedId, profile)
 
+    /**
+     * Repeat actual ADB observations six times. Do not create a fake benchmark or
+     * claim a faster TV based on CPU idling; show only descriptive before/after deltas.
+     */
+    fun measurePerformance(before: Boolean) {
+        val device = _state.value.selected ?: return
+        if (device.state != DeviceState.Online || _state.value.device.labBusy) {
+            _notice.value = "Подключите устройство и завершите предыдущие измерения."
+            return
+        }
+        labJob?.cancel()
+        val id = device.id
+        updateDevice(id) { it.copy(labBusy = true) }
+        labJob = viewModelScope.launch {
+            val samples = mutableListOf<Snapshot>()
+            try {
+                withTimeoutOrNull(50_000) {
+                    source.live(id).distinctUntilChangedBy { it.at }.take(6).collect { samples += it }
+                }
+                val result = PerformanceLab.summarize(samples)
+                if (result == null) {
+                    _notice.value = "Недостаточно измерений. Проверьте подключение и повторите попытку."
+                } else {
+                    updateDevice(id) { current ->
+                        if (before) current.copy(labBefore = result, labAfter = null)
+                        else current.copy(labAfter = result)
+                    }
+                    _notice.value = "Собрано реальных измерений: ${result.observations}."
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Не удалось получить реальные показатели через ADB."
+            } finally {
+                updateDevice(id) { it.copy(labBusy = false) }
+            }
+        }
+    }
+
+
+
     fun select(id: String?) {
         liveJob?.cancel()
         mediumJob?.cancel()
+        labJob?.cancel()
+        probeJob?.cancel()
         listsJob?.cancel()
         requestJob?.cancel()
         // A copy still running on this TV keeps its dialog, after a reconnect or a look at another TV.
@@ -352,6 +421,16 @@ class TellyscopeViewModel(
             _state.update { if (it.selectedId == device.id) it.copy(device = it.device.copy(history = history)) else it }
         }
         if (device.state != DeviceState.Online) return
+        probeJob = viewModelScope.launch {
+            val facts = try {
+                source.probeCapabilities(device.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null // No guesses about this firmware if read-only ADB fails.
+            }
+            updateDevice(device.id) { it.copy(capabilities = facts) }
+        }
         liveJob = viewModelScope.launch {
             source.live(id!!).collect { snap ->
                 lastSnapshot[id] = snap
@@ -521,12 +600,259 @@ class TellyscopeViewModel(
         }
     }
 
+    /**
+     * User-triggered encrypted export through Android's system document picker.
+     * Only known app metadata is included. ADB keys and downloaded profiles are excluded.
+     * The password char array is cleared after the I/O attempt.
+     */
+    /**
+     * Explicitly exports only the ADB identity as a separately password-encrypted file.
+     * Never include this identity in normal history/settings backups or diagnostic reports.
+     * This export alone does not fix the inherited live Kadb key-at-rest design.
+     */
+    fun exportAdbIdentity(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val dir = backupDir
+        val out = storage
+        if (dir == null || out == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Экспорт ключа ADB недоступен."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val encrypted = EncryptedAdbKeyBackup.export(dir, passphrase)
+                out.create(uri).buffer().use { it.write(encrypted) }
+                _notice.value = "Ключ ADB сохранён в зашифрованном виде. Храните его и пароль отдельно."
+            } catch (e: CancellationException) {
+                out.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                out.delete(uri)
+                _notice.value = "Не удалось экспортировать ключ ADB. Проверьте пароль и наличие ключа."
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+    }
+
+    fun exportLocalBackup(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val dir = backupDir
+        val dest = storage
+        if (dir == null || dest == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Резервное копирование недоступно."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val archive = EncryptedLocalBackup.export(dir, passphrase)
+                dest.create(uri).buffer().use { it.write(archive) }
+                _notice.value = "Зашифрованная резервная копия сохранена. Сохраните пароль отдельно."
+            } catch (e: CancellationException) {
+                dest.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                dest.delete(uri)
+                _notice.value = "Не удалось сохранить зашифрованную копию."
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+    }
+
+    /**
+     * Decrypt and validate a user-selected local backup, then ask which individual
+     * sections may be restored. Import never applies changes immediately.
+     */
+    fun previewLocalBackup(uri: Uri?, passphrase: CharArray?) {
+        if (uri == null || passphrase == null) {
+            passphrase?.fill('\u0000')
+            return
+        }
+        val phoneStorage = this.storage
+        if (phoneStorage == null || backupDir == null) {
+            passphrase.fill('\u0000')
+            _notice.value = "Восстановление недоступно."
+            return
+        }
+        pendingBackupPreview = null
+        _state.update { it.copy(backupEntries = emptySet()) }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val source = phoneStorage.open(uri)
+                require(source.size == null || source.size <= 8_000_100L) {
+                    "Файл резервной копии слишком велик."
+                }
+                val buffer = Buffer()
+                source.source.use { input ->
+                    while (true) {
+                        val n = input.read(buffer, 8192L)
+                        if (n < 0) break
+                        require(buffer.size <= 8_000_100L) { "Файл резервной копии слишком велик." }
+                    }
+                }
+                val preview = EncryptedLocalBackup.preview(buffer.readByteArray(), passphrase)
+                pendingBackupPreview = preview
+                _state.update { it.copy(backupEntries = preview.names) }
+                _notice.value = if (preview.names.isEmpty()) "Резервная копия не содержит доступных разделов."
+                    else "Резервная копия проверена. Выберите разделы для восстановления."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                pendingBackupPreview = null
+                _notice.value = "Не удалось открыть копию. Проверьте пароль, формат и целостность файла."
+            } finally {
+                passphrase.fill('\u0000')
+            }
+        }
+    }
+
+    /** Applies only the checked sections from an authenticated backup. The app must then restart. */
+    fun restoreLocalBackup(selected: Set<String>) {
+        val dir = backupDir ?: return
+        val preview = pendingBackupPreview ?: return
+        if (selected.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val restored = EncryptedLocalBackup.restorePreview(dir, preview, selected)
+                _notice.value = "Восстановлено разделов: ${restored.size}. Перезапустите приложение для обновления данных."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Восстановление прервано. Проверьте данные после перезапуска."
+            } finally {
+                pendingBackupPreview = null
+                _state.update { it.copy(backupEntries = emptySet()) }
+            }
+        }
+    }
+
+    fun cancelLocalBackupRestore() {
+        pendingBackupPreview = null
+        _state.update { it.copy(backupEntries = emptySet()) }
+    }
+
+    /** Manual signed-profile rollback. Does not revert any previously changed TV packages. */
+    fun rollbackSignedProfile() {
+        val device = _state.value.selected ?: return
+        if (device.state != DeviceState.Online) return
+        val id = device.id
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                when (val result = source.rollbackVerifiedProfile(id)) {
+                    is SignedProfilePolicy.Verdict.Accepted -> {
+                        val apps = source.apps(id)
+                        updateDevice(id) { it.copy(
+                            signedProfileLabel = "${result.profile.id} (rev. ${result.profile.revision})",
+                            apps = apps,
+                        ) }
+                        _notice.value = "Возвращена предыдущая подписанная версия профиля. Уже отключённые приложения автоматически не меняются."
+                    }
+                    is SignedProfilePolicy.Verdict.Rejected ->
+                        _notice.value = "Откат профиля не выполнен: ${result.reason}"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Не удалось выполнить откат профиля. Состояние ТВ не изменено."
+            }
+        }
+    }
+
+    /**
+     * Import two user-picked files, JSON and detached RSA signature. No profile is
+     * trusted unless the owner public key is pinned in this build and exact firmware
+     * identification plus documented physical QA match.
+     */
+    fun importSignedProfile(uris: List<Uri>) {
+        val id = _state.value.selectedId ?: return
+        val storage = this.storage ?: return
+        if (uris.size != 2) {
+            _notice.value = "Выберите ровно два файла: .json и .sig."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val contents = uris.map { uri ->
+                    val file = storage.open(uri)
+                    val limit = if (file.name.endsWith(".json", ignoreCase = true)) 65_536L
+                        else if (file.name.endsWith(".sig", ignoreCase = true)) 1_024L
+                        else throw IllegalArgumentException("Неизвестный формат.")
+                    require(file.size == null || file.size in 1..limit) { "Недопустимый размер файла." }
+                    val buffer = Buffer()
+                    file.source.use { input ->
+                        while (true) {
+                            val n = input.read(buffer, 4096L)
+                            if (n < 0) break
+                            require(buffer.size <= limit) { "Файл превышает допустимый размер." }
+                        }
+                    }
+                    file.name to buffer.readByteArray()
+                }
+                val json = contents.single { it.first.endsWith(".json", ignoreCase = true) }.second
+                val signature = contents.single { it.first.endsWith(".sig", ignoreCase = true) }.second
+                val verdict = source.importVerifiedProfile(id, json, signature)
+                when (verdict) {
+                    is SignedProfilePolicy.Verdict.Accepted -> {
+                        // Refresh package permissions from the verified exact-firmware profile.
+                        val apps = source.apps(id)
+                        updateDevice(id) { it.copy(
+                            signedProfileLabel = "${verdict.profile.id} (rev. ${verdict.profile.revision})",
+                            apps = apps,
+                        ) }
+                        _notice.value = "Подпись владельца и соответствие прошивки проверены."
+                    }
+                    is SignedProfilePolicy.Verdict.Rejected ->
+                        _notice.value = "Профиль не принят: ${verdict.reason}"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Невозможно импортировать профиль: проверьте оба файла и подпись."
+            }
+        }
+    }
+
+    /** Saves a local, privacy-aware diagnostic report through Android's document picker. */
+    fun saveDiagnosticReport(uri: Uri?) {
+        if (uri == null) return
+        val storage = storage ?: return
+        val report = DiagnosticReport.render(_state.value, clock())
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                storage.create(uri).buffer().use { sink -> sink.writeUtf8(report) }
+                _notice.value = "Диагностический отчёт сохранён."
+            } catch (e: CancellationException) {
+                storage.delete(uri)
+                throw e
+            } catch (_: Exception) {
+                storage.delete(uri)
+                _notice.value = "Не удалось сохранить отчёт. Проверьте доступное место и разрешение на запись."
+            }
+        }
+    }
+
     /** Changes [id]'s page only while it is still the one shown; a result for another TV is dropped. */
     private fun updateDevice(id: String, f: (DeviceUi) -> DeviceUi) =
         _state.update { s -> if (s.selectedId == id) s.copy(device = f(s.device)) else s }
 
     private fun run(pkg: String, action: Action, undoing: Long? = null, id: String? = _state.value.selectedId) {
         if (id == null) return
+        val app = _state.value.device.apps.firstOrNull { it.packageName == pkg }
+        PackageActionPolicy.refusal(app, action)?.let { reason ->
+            _notice.value = reason
+            undoing?.let(undoInFlight::remove)
+            updateDevice(id) { it.copy(pending = null) }
+            return
+        }
         updateDevice(id) { it.copy(pending = null, busy = pkg) }
         viewModelScope.launch {
             // The source throws with the user-facing reason when the TV refuses.
@@ -616,17 +942,79 @@ class TellyscopeViewModel(
         viewModelScope.launch { loadFiles() }
     }
 
+    fun enterFolder(name: String) {
+        val files = _state.value.device.files
+        if (files.busy || files.list?.none { it.name == name && it.isDirectory } != false || files.subfolders.size >= 12) return
+        _state.update { it.copy(device = it.device.copy(files = FilesUi(files.folder, subfolders = files.subfolders + name))) }
+        viewModelScope.launch { loadFiles() }
+    }
+
+    fun parentFolder() {
+        val files = _state.value.device.files
+        if (files.busy || files.subfolders.isEmpty()) return
+        _state.update {
+            it.copy(device = it.device.copy(files = FilesUi(files.folder, subfolders = files.subfolders.dropLast(1))))
+        }
+        viewModelScope.launch { loadFiles() }
+    }
+
+    /** The UI asks explicitly before invoking any destructive operation. */
+    fun createFolder(name: String) = changeFile("Папка создана.") { id, folder, sub ->
+        source.createDirectory(id, folder, sub, name)
+    }
+
+    fun renameFile(file: TvFile, to: String) = changeFile("Имя изменено.") { id, folder, sub ->
+        require(file in _state.value.device.files.list.orEmpty()) { "Файл уже недоступен." }
+        source.renameFile(id, folder, sub, file.name, to)
+    }
+
+    fun deleteFile(file: TvFile) = changeFile("Удалено. Восстановление удалённого файла не гарантируется.") { id, folder, sub ->
+        require(file in _state.value.device.files.list.orEmpty()) { "Файл уже недоступен." }
+        source.deleteFile(id, folder, sub, file.name)
+    }
+
+    private fun changeFile(
+        success: String,
+        block: suspend (deviceId: String, folder: TvFolder, subfolders: List<String>) -> Unit,
+    ) {
+        val id = _state.value.selectedId ?: return
+        val files = _state.value.device.files
+        if (files.busy || _state.value.selected?.state != DeviceState.Online) return
+        updateDevice(id) { it.copy(files = files.copy(busy = true)) }
+        viewModelScope.launch {
+            try {
+                block(id, files.folder, files.subfolders)
+                _notice.value = success
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _notice.value = "Операция не выполнена: " + (e.message ?: "неизвестная ошибка.")
+            } finally {
+                updateDevice(id) { it.copy(files = it.files.copy(busy = false)) }
+                if (_state.value.selectedId == id &&
+                    _state.value.device.files.folder == files.folder &&
+                    _state.value.device.files.subfolders == files.subfolders) loadFiles()
+            }
+        }
+    }
+
     private suspend fun loadFiles() {
         val id = _state.value.selectedId ?: return
-        val folder = _state.value.device.files.folder
+        val fileState = _state.value.device.files
+        val folder = fileState.folder
+        val subfolders = fileState.subfolders
         val ui = try {
-            FilesUi(folder, source.files(id, folder))
+            fileState.copy(list = source.browseFiles(id, folder, subfolders), error = null)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            FilesUi(folder, emptyList(), Copy.FILES_LOST)
+            fileState.copy(list = emptyList(), error = Copy.FILES_LOST)
         }
-        _state.update { s -> if (s.device.files.folder == folder) s.copy(device = s.device.copy(files = ui)) else s }
+        _state.update { st ->
+            if (st.selectedId == id && st.device.files.folder == folder && st.device.files.subfolders == subfolders)
+                st.copy(device = st.device.copy(files = ui.copy(busy = st.device.files.busy)))
+            else st
+        }
     }
 
     /** Copies a phone file into the folder on show. Never overwrites: a taken name gets " (1)". */
@@ -634,6 +1022,7 @@ class TellyscopeViewModel(
         val id = _state.value.selectedId ?: return
         val storage = storage ?: return
         val folder = _state.value.device.files.folder
+        val subfolders = _state.value.device.files.subfolders
         transferJobs[id] = viewModelScope.launch {
             val file = try {
                 storage.open(uri)
@@ -644,7 +1033,9 @@ class TellyscopeViewModel(
             setTransfer(id, TransferUi(file.name, toTv = true, folder = folder))
             try {
                 val saved = file.source.use { src ->
-                    source.push(id, folder, file.name, file.size, src) { p -> updateTransfer(id) { it.copy(progress = p) } }
+                    source.pushInto(id, folder, subfolders, file.name, file.size, src) { p ->
+                        updateTransfer(id) { it.copy(progress = p) }
+                    }
                 }
                 // Close the dialog before the reload: a Cancel tapped now would report a sent file as cancelled.
                 setTransfer(id, null)
@@ -661,30 +1052,37 @@ class TellyscopeViewModel(
         }
     }
 
-    /** The file whose "save as" picker is open. Kept here so it survives the activity being recreated behind the picker. */
-    private var saving: TvFile? = null
+    /** Captures an exact device and directory before Android's save-file picker opens. */
+    private data class PendingDownload(
+        val deviceId: String, val folder: TvFolder, val subfolders: List<String>, val file: TvFile,
+    )
+    private var saving: PendingDownload? = null
 
     fun saving(file: TvFile) {
-        saving = file
-    }
-
-    /** The picker's answer: copies the file there, or does nothing if the user backed out. */
-    fun saveTo(uri: Uri?) {
-        val file = saving ?: return
-        saving = null
-        if (uri != null) pull(file, uri)
-    }
-
-    /** A cancelled or failed copy removes the partial file. */
-    private fun pull(file: TvFile, uri: Uri) {
         val id = _state.value.selectedId ?: return
+        val current = _state.value.device.files
+        if (file.isDirectory || file !in current.list.orEmpty()) return
+        saving = PendingDownload(id, current.folder, current.subfolders, file)
+    }
+
+    /** The picker's answer: copying always targets the original TV, not a TV switched to meanwhile. */
+    fun saveTo(uri: Uri?) {
+        val pending = saving ?: return
+        saving = null
+        if (uri != null) pull(pending, uri)
+    }
+
+    /** A cancelled or failed copy removes the partial phone file. */
+    private fun pull(pending: PendingDownload, uri: Uri) {
         val storage = storage ?: return
-        val folder = _state.value.device.files.folder
+        val (id, folder, subfolders, file) = pending
         setTransfer(id, TransferUi(file.name, toTv = false, folder = folder, progress = Progress(0, file.size)))
         transferJobs[id] = viewModelScope.launch {
             try {
                 storage.create(uri).use { sink ->
-                    source.pull(id, folder, file, sink) { p -> updateTransfer(id) { it.copy(progress = p) } }
+                    source.pullFrom(id, folder, subfolders, file, sink) { p ->
+                        updateTransfer(id) { it.copy(progress = p) }
+                    }
                 }
                 _notice.value = Copy.saved(file.name)
             } catch (e: CancellationException) {
@@ -880,13 +1278,21 @@ class TellyscopeViewModel(
         viewModelScope.launch {
             var done = 0
             for (pkg in packages) {
+                // A serious refusal stops the batch; never silently skip and continue.
+                val app = _state.value.device.apps.firstOrNull { it.packageName == pkg }
+                val refusal = PackageActionPolicy.refusal(app, Action.Disable)
+                if (refusal != null) {
+                    _notice.value = refusal
+                    break
+                }
                 try {
                     source.act(id, Action.Disable, pkg)
                     done++
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    // The TV refused this one or dropped; the count says so.
+                    // Connection loss may leave the outcome unknown: do not retry.
+                    break
                 }
             }
             _notice.value = Copy.disabledSuggested(done, packages.size)

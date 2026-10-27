@@ -90,6 +90,14 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     /** Wireless debugging advertises pairing and connect on different ports. */
     private val pairingPorts = ConcurrentHashMap<String, Int>()
     private val book = HistoryBook(File(appContext.filesDir, "history.tsv"))
+    private val knownFirmware = ConcurrentHashMap<String, DeviceCapabilities>()
+    private val trustedProfiles by lazy {
+        val pinnedKey = runCatching {
+            appContext.assets.open("owner_profile_public_key.base64").bufferedReader().use { it.readText().trim() }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        VerifiedProfileStore(File(appContext.filesDir, "verified-profiles"), pinnedKey)
+    }
+
     private val names = NameBook(File(appContext.filesDir, "names.tsv"))
     /** Last label seen per package, so history entries read like the app list. */
     private val labels = ConcurrentHashMap<String, String>()
@@ -185,6 +193,8 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun reconnect(deviceId: String) {
         restored.await()
+        // A different firmware or TV may appear behind the same IP after reconnect.
+        knownFirmware.remove(deviceId)
         links[deviceId]?.connect()
     }
 
@@ -195,6 +205,7 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun forget(deviceId: String) {
         restored.await()
+        knownFirmware.remove(deviceId)
         watchers.remove(deviceId)?.cancel()
         keyHelpers.remove(deviceId)?.close()
         links.remove(deviceId)?.disconnect()
@@ -312,6 +323,9 @@ class AdbDeviceSource(context: Context) : DeviceSource {
                     procs = s.processes.map { Proc(it.pid, it.name, it.packageName, it.cpuPercent ?: 0.0, (it.rssKb / 1024).toInt()) },
                     netBytesPerSec = s.netBytesPerSec,
                     softwareMonth = s.softwareMonth,
+                    cpuAvailable = s.cpuPercent != null,
+                    ramAvailable = mem != null,
+                    uptimeAvailable = s.uptimeSeconds != null,
                 )
             }
     }
@@ -324,6 +338,38 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     /** Runs a change with that TV's stats paused, so a slow stats read can't compete with it or cut it off. */
     private suspend fun <T> busy(deviceId: String, block: suspend () -> T): T =
         links[deviceId]?.gate?.during(block) ?: block()
+
+    override suspend fun probeCapabilities(deviceId: String): DeviceCapabilities {
+        val shell = session(deviceId)
+        // Constant, read-only ADB property queries; never accept shell text from a profile.
+        suspend fun prop(key: String): String? {
+            val result = shell.shell("getprop $key")
+            return if (result.exitCode == 0) CapabilityProperties.value(result.output) else null
+        }
+        val capabilities = DeviceCapabilities(
+            manufacturer = prop("ro.product.manufacturer"),
+            model = prop("ro.product.model"),
+            androidVersion = prop("ro.build.version.release"),
+            sdk = CapabilityProperties.sdk(prop("ro.build.version.sdk")),
+            buildId = prop("ro.build.id"),
+            firmwareFingerprint = prop("ro.build.fingerprint"),
+            detectedAt = System.currentTimeMillis(),
+        )
+        knownFirmware[deviceId] = capabilities
+        return capabilities
+    }
+
+    override suspend fun importVerifiedProfile(
+        deviceId: String, jsonBytes: ByteArray, signature: ByteArray,
+    ): SignedProfilePolicy.Verdict {
+        val current = probeCapabilities(deviceId)
+        return trustedProfiles.import(jsonBytes, signature, current)
+    }
+
+    override suspend fun rollbackVerifiedProfile(deviceId: String): SignedProfilePolicy.Verdict {
+        val current = probeCapabilities(deviceId)
+        return trustedProfiles.rollback(current)
+    }
 
     override suspend fun apps(deviceId: String): List<AppInfo> {
         val shell = session(deviceId)
@@ -338,6 +384,13 @@ class AdbDeviceSource(context: Context) : DeviceSource {
         // Same key as history: a placeholder serial must not give two boxes one cache.
         val names = appNames.names(key(deviceId), listed, LabelHelper(shell, helperDex)::describe)
         val keep = keep[key(deviceId)].orEmpty()
+        // No trust root or no exact firmware = NO recovery permission.
+        val signed = knownFirmware[deviceId]?.let { trustedProfiles.current(it) }
+            as? SignedProfilePolicy.Verdict.Accepted
+        val restoreVerified = signed?.profile?.actions
+            ?.filter { it.operation == "disable" && it.recovery == "enable" }
+            ?.map { it.packageName }?.toSet().orEmpty()
+
         // On a launcher the user added, offer the way back to the one it replaced.
         val back = homeOptions?.current?.takeIf { it !in system }
             ?.let { homeBackTarget(it, book.entries(key(deviceId)), builtIns(system, disabled, homeOptions)) }
@@ -365,6 +418,8 @@ class AdbDeviceSource(context: Context) : DeviceSource {
                 homeBack = back?.takeIf { p.name == homeOptions?.current }?.let { names[it.pkg]?.label ?: AppNames.fallback(it.pkg) },
                 homeService = p.name in serviceLaunchers,
                 listKeep = p.name in keep,
+                verifiedRestorePath = p.name in restoreVerified,
+
             )
         }.sortedBy { it.label.lowercase() }
     }
@@ -408,6 +463,18 @@ class AdbDeviceSource(context: Context) : DeviceSource {
         busy(deviceId) { actNow(deviceId, action, packageName, undoing) }
 
     private suspend fun actNow(deviceId: String, action: Action, packageName: String, undoing: Long?): HistoryEntry {
+        // Source-level fail-closed preflight: protects other callers, not only Compose UI.
+        if (action in setOf(Action.Stop, Action.Disable, Action.Uninstall)) {
+            var current = apps(deviceId).firstOrNull { it.packageName == packageName }
+            if (action == Action.Disable && current?.system == true) {
+                // Only a SYSTEM package requires an owner-approved exact-firmware
+                // recovery path. User apps can be disabled without a build fingerprint.
+                val now = probeCapabilities(deviceId)
+                require(now.exactFirmwareKnown) { "Прошивка не определена; системный пакет не отключён." }
+                current = apps(deviceId).firstOrNull { it.packageName == packageName }
+            }
+            PackageActionPolicy.refusal(current, action)?.let { throw IllegalStateException(it) }
+        }
         val shell = session(deviceId)
         // Before the first change on a TV, note what was already off: Restore must leave those alone.
         val key = key(deviceId)
@@ -677,11 +744,38 @@ class AdbDeviceSource(context: Context) : DeviceSource {
 
     override suspend fun files(deviceId: String, folder: TvFolder) = Files(session(deviceId)).list(folder)
 
+    override suspend fun browseFiles(deviceId: String, folder: TvFolder, subfolders: List<String>): List<TvFile> =
+        Files(session(deviceId)).list(folder, subfolders)
+
+    override suspend fun createDirectory(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) =
+        busy(deviceId) { Files(session(deviceId)).createDirectory(folder, subfolders, name) }
+
+    override suspend fun renameFile(deviceId: String, folder: TvFolder, subfolders: List<String>, oldName: String, newName: String) =
+        busy(deviceId) { Files(session(deviceId)).rename(folder, subfolders, oldName, newName) }
+
+    override suspend fun deleteFile(deviceId: String, folder: TvFolder, subfolders: List<String>, name: String) =
+        busy(deviceId) { Files(session(deviceId)).delete(folder, subfolders, name) }
+
+
     override suspend fun push(deviceId: String, folder: TvFolder, name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit) =
-        busy(deviceId) { Files(session(deviceId)).push(source, size, name, folder, onProgress) }
+        busy(deviceId) { Files(session(deviceId)).push(source, size, name, folder, onProgress = onProgress) }
 
     override suspend fun pull(deviceId: String, folder: TvFolder, file: TvFile, sink: Sink, onProgress: (Progress) -> Unit) =
-        busy(deviceId) { Files(session(deviceId)).pull(folder, file, sink, onProgress) }
+        busy(deviceId) { Files(session(deviceId)).pull(folder, file, sink, onProgress = onProgress) }
+
+    override suspend fun pushInto(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        name: String, size: Long?, source: Source, onProgress: (Progress) -> Unit,
+    ): String = busy(deviceId) {
+        Files(session(deviceId)).push(source, size, name, folder, subfolders, onProgress)
+    }
+
+    override suspend fun pullFrom(
+        deviceId: String, folder: TvFolder, subfolders: List<String>,
+        file: TvFile, sink: Sink, onProgress: (Progress) -> Unit,
+    ) = busy(deviceId) {
+        Files(session(deviceId)).pull(folder, file, sink, subfolders, onProgress)
+    }
 
     private fun session(deviceId: String) =
         links[deviceId]?.session ?: throw IllegalStateException("$deviceId is offline")

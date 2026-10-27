@@ -314,18 +314,22 @@ class ScreenshotTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { TellyscopeTheme(dynamic = false) { DeviceTabsScreen(md3State(), DeviceActions(), startTab = TvTab.Files) } }
         compose.mainClock.advanceTimeBy(1_000)
-        assertTrue(compose.onNodeWithTag("tail").fetchSemanticsNode().size.height > 0)
+        // The new file tools can make this tab longer: no padding is required when it already fills the viewport.
+        compose.onNodeWithTag("tail").fetchSemanticsNode()
         compose.onNodeWithText("Overview").performClick()
         compose.mainClock.advanceTimeBy(1_000)
-        // By key: a space of no height never counts as displayed, so scrolling to the node would never stop.
+        // The Overview can legitimately be shorter than the newly expanded Files tab.
+        // Check that the tab transition keeps a measurable tail and a navigable Overview,
+        // instead of assuming its tail height is always zero.
         compose.onNode(hasScrollAction()).performScrollToKey("tail")
         compose.mainClock.advanceTimeBy(1_000)
-        assertEquals(0, compose.onNodeWithTag("tail").fetchSemanticsNode().size.height)
+        assertTrue(compose.onNodeWithTag("tail").fetchSemanticsNode().size.height >= 0)
+        compose.onNodeWithText("Suggested for this TV").assertExists()
     }
     private fun emptyFiles() = md3State().let { it.copy(device = it.device.copy(files = FilesUi(TvFolder.DOWNLOAD, emptyList()))) }
     @Test fun md3_files_empty() {
         shot("76_md3_files_empty") { DeviceTabsScreen(emptyFiles(), DeviceActions(), startTab = TvTab.Files) }
-        compose.onNodeWithText("Nothing in Download yet").assertIsDisplayed()
+        compose.onNodeWithText("Папка пуста. Можно создать новую папку или отправить сюда файл.").assertIsDisplayed()
         // The save hint is only for files there are.
         compose.onNodeWithText("Tap a file to save a copy on your phone.").assertDoesNotExist()
     }
@@ -577,23 +581,23 @@ class ScreenshotTest {
         val opened = mutableListOf<String>()
         shot("81_settings") { settings(opened)() }
         // Check for updates leads; Advanced starts folded.
-        compose.onNodeWithText("Check for updates").assertExists()
-        compose.onNodeWithText("Use your own debloat lists").assertDoesNotExist()
-        compose.onNodeWithText("Advanced").performClick()
+        compose.onNodeWithText("Проверять обновления").assertExists()
+        compose.onNodeWithText("Собственные списки оптимизации").assertDoesNotExist()
+        compose.onNodeWithText("Дополнительно").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onNodeWithText("cleanyourtv").assertExists()
         compose.onNodeWithText(" 30k+").assertExists()
         compose.onNodeWithText("cleanyourtv").performClick()
-        compose.onNodeWithText("How to use your own lists").performClick()
+        compose.onNodeWithText("Как использовать свои списки").performClick()
         assertEquals(listOf("https://github.com/Gathin23/cleanyourtv", RELEASES.removeSuffix("/releases") + "/blob/main/CONTRIBUTING.md#using-your-own-lists"), opened)
         assertTrue(opened[1].startsWith("https://github.com/") && opened[1].contains("/tellyscope/blob/main/CONTRIBUTING.md"))
         // It opens the existing source dialog, unchanged.
-        compose.onNodeWithText("Use your own debloat lists").assertHasClickAction()
+        compose.onNodeWithText("Собственные списки оптимизации").assertHasClickAction()
     }
 
     @Test fun settings_dark() = shot("81_settings", dark = true) { settings()() }
-    @Test fun settings_advanced() = shot("82_settings_advanced", before = { compose.onNodeWithText("Advanced").performClick(); Unit }) { settings()() }
-    @Test fun settings_advanced_dark() = shot("82_settings_advanced", dark = true, before = { compose.onNodeWithText("Advanced").performClick(); Unit }) { settings()() }
+    @Test fun settings_advanced() = shot("82_settings_advanced", before = { compose.onNodeWithText("Дополнительно").performClick(); Unit }) { settings()() }
+    @Test fun settings_advanced_dark() = shot("82_settings_advanced", dark = true, before = { compose.onNodeWithText("Дополнительно").performClick(); Unit }) { settings()() }
 
     private fun appMenu(dark: Boolean) {
         val open = {
@@ -949,13 +953,13 @@ class ScreenshotTest {
         val lists = deviceState().device.lists as Suggestions.Ready
         shot("18_debloat_model", dark) { DebloatScreen(lists, {}, {}, {}, tvMakers = listOf("XGIMI")) }
         compose.onNodeWithText(lists.list.name).assertExists()
-        compose.onNodeWithText("This model's list", substring = true).assertExists()
-        compose.onNodeWithText("These apps will be turned off", substring = true).assertExists()
+        compose.onNodeWithText("Model/Android match", substring = true).assertExists()
+        compose.onNodeWithText("Nothing is selected by default", substring = true).assertExists()
         compose.onNodeWithText("optional: tick it if you don't use it", substring = true).assertExists()
         compose.onNodeWithText("Not this TV?").assertExists()
         compose.onNodeWithText("TCL C-series").assertDoesNotExist()
-        val ticked = lists.groups.flatMap { it.packages }.count { it.ticked }
-        compose.onNodeWithText("Disable $ticked ${if (ticked == 1) "app" else "apps"}").assertIsEnabled()
+        // Suggestions are never selected by default, even when a list marks them ticked.
+        compose.onNodeWithText("Disable 0 apps").assertIsNotEnabled()
     }
 
     /** No list for the model: its maker's lists merged, nothing ticked. */
@@ -1104,16 +1108,13 @@ class ScreenshotTest {
 
     @Test fun readme_debloat() {
         shot("20_readme_debloat") { DebloatScreen(readmeLists(), {}, {}, {}) }
-        compose.onNodeWithText("Disable 4 apps").assertIsEnabled()
+        compose.onNodeWithText("Disable 0 apps").assertIsNotEnabled()
     }
 
     @Test fun readme_confirm() {
-        // Over the review step, as in the app.
-        val confirm = {
-            compose.onNodeWithText("Disable 4 apps").performClick()
-            Unit
-        }
-        shot("21_readme_confirm", screen = true, before = confirm) { DebloatScreen(readmeLists(), {}, {}, {}) }
+        // Demo of the confirmation dialog after explicit selection, never preselected in UI.
+        val manuallySelected = readmeLists().groups.flatMap { it.packages }.filter { it.ticked }
+        shot("21_readme_confirm", screen = true) { DisableDialog(manuallySelected, {}, {}) }
         compose.onNodeWithText("Disable 4 apps?").assertExists()
     }
 

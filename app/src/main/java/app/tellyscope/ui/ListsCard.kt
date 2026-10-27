@@ -117,10 +117,8 @@ fun DebloatScreen(
     val prefill = remember(devices) { tvMakers.map { it.trim() }.firstOrNull { it.isNotEmpty() && finds(it).isNotEmpty() } }
     var typed by rememberSaveable { mutableStateOf<String?>(null) }
     val q = typed ?: prefill.orEmpty()
-    // Ticks start from the list and reset whenever it reloads.
-    var ticked by remember(lists) {
-        mutableStateOf(ready?.groups.orEmpty().flatMap { it.packages }.filter { it.ticked }.map { it.pkg }.toSet())
-    }
+    // Requirement #1: lists may suggest packages, but NEVER preselect a package for mutation.
+    var ticked by remember(lists) { mutableStateOf(emptySet<String>()) }
     var confirming by remember { mutableStateOf(false) }
     val showing = ready?.takeIf { chosen == null || it.list.id == chosen }
     // With no list, every app that's on and not protected, by name.
@@ -234,7 +232,7 @@ fun DebloatScreen(
                     when {
                         showing == null -> MatchCard(kind, tv?.let(::name) ?: "This TV", "No list for this TV or its maker yet", Match.None) { marked = null; searching = true }
                         showing.byMaker -> MatchCard(kind, showing.list.name, "No list for this model, so these come from ${showing.list.name}'s other models", Match.Loose) { marked = null; searching = true }
-                        showing.sdkMatches -> MatchCard(kind, showing.list.name, "This model's list · tested on ${showing.list.testedOs ?: showing.sdk?.let(::androidName)}", Match.Exact) { marked = null; searching = true }
+                        showing.sdkMatches -> MatchCard(kind, showing.list.name, "Model/Android match; recommendations have NOT been independently verified", Match.Exact) { marked = null; searching = true }
                         else -> MatchCard(
                             kind, showing.list.name,
                             showing.list.testedOs?.let { "This model's list, tested on $it, not this TV's Android" }
@@ -245,7 +243,7 @@ fun DebloatScreen(
                     Text(
                         when {
                             showing == null -> "Tick the apps to turn off. Apps the TV needs to run aren't shown."
-                            showing.sdkMatches && !showing.byMaker -> "These apps will be turned off. Untick any you use."
+                            showing.sdkMatches && !showing.byMaker -> "Nothing is selected by default. Review each package and select only what you understand."
                             else -> "Nothing is ticked: tick only the apps you know you don't use."
                         } + " Nothing is deleted, and History can turn each one back on.",
                         style = MaterialTheme.typography.bodyMedium,

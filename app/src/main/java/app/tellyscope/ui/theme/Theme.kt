@@ -19,45 +19,47 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Branded fallback for phones without dynamic color (Android 11 and older).
-// Seed: a deep teal, picked to read as "screen glow" without clashing with app icon tiles.
+// TV Optimizer Pro: forest-green and antique-gold brand.
+// Dynamic color is opt-in so a device's wallpaper never silently overrides the brand.
 private val LightBrand = lightColorScheme(
-    primary = Color(0xFF00696B),
+    primary = Color(0xFF1A5842),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF9CF1F2),
-    onPrimaryContainer = Color(0xFF002020),
-    secondary = Color(0xFF4A6363),
-    secondaryContainer = Color(0xFFCCE8E8),
-    onSecondaryContainer = Color(0xFF051F1F),
-    tertiary = Color(0xFF4B607C),
-    tertiaryContainer = Color(0xFFD3E4FF),
-    error = Color(0xFFBA1A1A),
-    background = Color(0xFFF4FBFA),
-    surface = Color(0xFFF4FBFA),
-    surfaceContainerLow = Color(0xFFEEF5F4),
-    surfaceContainer = Color(0xFFE9EFEE),
-    surfaceContainerHigh = Color(0xFFE3E9E9),
+    primaryContainer = Color(0xFFD4E9D9),
+    onPrimaryContainer = Color(0xFF103C2B),
+    secondary = Color(0xFF84631F),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFF2E3BC),
+    onSecondaryContainer = Color(0xFF33270E),
+    tertiary = Color(0xFF476B58),
+    tertiaryContainer = Color(0xFFDEECE1),
+    error = Color(0xFFB4232B),
+    background = Color(0xFFF5F8F3),
+    surface = Color(0xFFF5F8F3),
+    surfaceContainerLow = Color(0xFFF0F4EE),
+    surfaceContainer = Color(0xFFE8EFE7),
+    surfaceContainerHigh = Color(0xFFE0EAE0),
 )
 
 private val DarkBrand = darkColorScheme(
-    primary = Color(0xFF80D4D5),
-    onPrimary = Color(0xFF003737),
-    primaryContainer = Color(0xFF004F50),
-    onPrimaryContainer = Color(0xFF9CF1F2),
-    secondary = Color(0xFFB0CCCB),
-    secondaryContainer = Color(0xFF324B4B),
-    onSecondaryContainer = Color(0xFFCCE8E8),
-    tertiary = Color(0xFFB3C8E8),
-    tertiaryContainer = Color(0xFF334863),
+    primary = Color(0xFFE2BE71),
+    onPrimary = Color(0xFF2B260D),
+    primaryContainer = Color(0xFF314A35),
+    onPrimaryContainer = Color(0xFFF3E6C8),
+    secondary = Color(0xFF9BC6AD),
+    onSecondary = Color(0xFF103527),
+    secondaryContainer = Color(0xFF244E3B),
+    onSecondaryContainer = Color(0xFFD8EBDD),
+    tertiary = Color(0xFFD1AC63),
+    tertiaryContainer = Color(0xFF574821),
     error = Color(0xFFFFB4AB),
-    background = Color(0xFF0E1415),
-    surface = Color(0xFF0E1415),
-    surfaceContainerLow = Color(0xFF161D1D),
-    surfaceContainer = Color(0xFF1A2121),
-    surfaceContainerHigh = Color(0xFF252B2B),
+    background = Color(0xFF0D1D16),
+    surface = Color(0xFF0D1D16),
+    surfaceContainerLow = Color(0xFF13271D),
+    surfaceContainer = Color(0xFF193023),
+    surfaceContainerHigh = Color(0xFF254333),
 )
 
-/** Numbers come first: the app font with tabular figures, so values line up and don't jitter as they update. */
+/** Tabular figures keep real-time measurements aligned. */
 val StatNumber = TextStyle(fontWeight = FontWeight.Medium, fontSize = 28.sp, lineHeight = 34.sp, fontFeatureSettings = "tnum")
 val SmallNumber = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontFeatureSettings = "tnum")
 
@@ -65,7 +67,7 @@ val SmallNumber = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontFeatureSet
 @Composable
 fun TellyscopeTheme(
     dark: Boolean = isSystemInDarkTheme(),
-    dynamic: Boolean = true,
+    dynamic: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current

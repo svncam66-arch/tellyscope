@@ -93,8 +93,12 @@ class MainActivity : ComponentActivity() {
                                     TellyscopeViewModel(
                                         scenario?.let(::FakeDeviceSource) ?: AdbDeviceSource(applicationContext),
                                         AndroidPhoneStorage(applicationContext),
-                                        updates = if (scenario != null) null else updateCheck(),
+                                        // An experimental APK cannot safely upgrade itself using
+                                        // legacy Tellyscope release assets or mismatched signatures.
+                                        updates = if (scenario != null || packageName.endsWith(".experimental")) null
+                                            else updateCheck(),
                                         folds = FoldBook(File(filesDir, "folds.properties")),
+                                        backupDir = filesDir,
                                     )
                                 }
                             },
@@ -109,7 +113,7 @@ class MainActivity : ComponentActivity() {
     private fun updateCheck(): UpdateCheck {
         @Suppress("DEPRECATION") // the flags overload is API 33+
         val version = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
-        // Alpha builds install as app.tellyscope.alpha (app/build.gradle.kts).
+        // Production update validation must verify target package/signature before installation.
         return UpdateCheck(File(filesDir, "updates.properties"), version, alpha = packageName.endsWith(".alpha"))
     }
 
@@ -170,6 +174,34 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
     val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::push) }
     val saveFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream"), vm::saveTo)
     val saveScreenshot = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"), vm::screenshotTo)
+    val saveDiagnosticReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain"), vm::saveDiagnosticReport)
+    val pickSignedProfile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(), vm::importSignedProfile,
+    )
+    var exportPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val pwd = exportPassphrase
+        exportPassphrase = null
+        vm.exportLocalBackup(uri, pwd)
+    }
+    var exportAdbPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val exportAdbIdentity = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        val pwd = exportAdbPassphrase
+        exportAdbPassphrase = null
+        vm.exportAdbIdentity(uri, pwd)
+    }
+    var importPassphrase by remember { mutableStateOf<CharArray?>(null) }
+    val importBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val pwd = importPassphrase
+        importPassphrase = null
+        vm.previewLocalBackup(uri, pwd)
+    }
 
     state.update?.let { u ->
         UpdateDialog(u, onGet = { vm.updateLater(); runCatching { browser.openUri(u.url) } }, onLater = vm::updateLater, onSkip = vm::skipUpdate)
@@ -216,7 +248,7 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             vm.showStats(StatsProfile.ADVANCED)
             onDispose { vm.showStats(StatsProfile.OTHER) }
         }
-        AdvancedScreen(state, back = { advanced = false }, snackbar = snackbar)
+        AdvancedScreen(state, back = { advanced = false }, onExportReport = { saveDiagnosticReport.launch("tv-optimizer-diagnostics.txt") }, onMeasure = vm::measurePerformance, onImportProfile = { pickSignedProfile.launch(arrayOf("*/*")) }, onRollbackProfile = vm::rollbackSignedProfile, snackbar = snackbar)
     } else if (settings) {
         BackHandler { settings = false }
         SettingsScreen(
@@ -226,6 +258,24 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
             alphaBuild = state.alphaBuild,
             onCheckUpdates = vm::setCheckUpdates,
             back = { settings = false },
+            onExportBackup = { pwd ->
+                exportPassphrase?.fill('\u0000')
+                exportPassphrase = pwd
+                exportBackup.launch("tv-optimizer-pro.tvopbak")
+            },
+            onImportBackup = { pwd ->
+                importPassphrase?.fill('\u0000')
+                importPassphrase = pwd
+                importBackup.launch(arrayOf("*/*"))
+            },
+            onExportAdbIdentity = { pwd ->
+                exportAdbPassphrase?.fill('\u0000')
+                exportAdbPassphrase = pwd
+                exportAdbIdentity.launch("tv-optimizer-adb-identity-encrypted.tvopkey")
+            },
+            backupEntries = state.backupEntries,
+            onRestoreBackup = vm::restoreLocalBackup,
+            onCancelBackupRestore = vm::cancelLocalBackupRestore,
             snackbar = snackbar,
         )
     } else if (debloat) {
@@ -265,6 +315,12 @@ fun TellyscopeApp(vm: TellyscopeViewModel) {
                 closeSideload = vm::closeSideload,
                 openInstalled = vm::openInstalled,
                 folder = vm::folder,
+                enterFolder = vm::enterFolder,
+                parentFolder = vm::parentFolder,
+                pickFileHere = { pickFile.launch(arrayOf("*/*")) },
+                createFolder = vm::createFolder,
+                renameFile = vm::renameFile,
+                deleteFile = vm::deleteFile,
                 pickFile = { folder -> vm.folder(folder); pickFile.launch(arrayOf("*/*")) },
                 saveFile = { f -> vm.saving(f); saveFile.launch(f.name) },
                 cancelTransfer = vm::cancelTransfer,

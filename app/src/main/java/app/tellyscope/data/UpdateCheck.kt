@@ -10,8 +10,8 @@ import java.io.File
 import java.util.Properties
 
 /** Where releases are published: the app's own GitHub repo. */
-const val RELEASES = "https://github.com/man15h/tellyscope/releases"
-private const val RELEASES_API = "https://api.github.com/repos/man15h/tellyscope/releases?per_page=20"
+const val RELEASES = "https://github.com/svncam66-arch/tellyscope/releases"
+private const val RELEASES_API = "https://api.github.com/repos/svncam66-arch/tellyscope/releases?per_page=20"
 
 /** How long a check counts for: release builds ask every 30 minutes, alpha builds every 5 minutes for testing. */
 private const val RELEASE_INTERVAL_MS = 30 * 60 * 1000L

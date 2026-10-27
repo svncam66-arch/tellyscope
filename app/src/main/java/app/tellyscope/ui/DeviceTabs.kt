@@ -335,14 +335,7 @@ fun DeviceTabsScreen(
                         val folder = ui.files.folder
                         when {
                             offline -> item { EmptyState(DeviceIcons.Tv, Copy.TV_OFFLINE, "Connect to the TV to see its files.") }
-                            ui.files.error == null && ui.files.list?.isEmpty() == true -> item {
-                                EmptyState(
-                                    if (folder == TvFolder.MOVIES) TileIcons.Movie else TabIcons.Folder,
-                                    "Nothing in ${Copy.folder(folder)} yet",
-                                    "Files you send land here.",
-                                )
-                            }
-                            else -> item { FilesBlock(ui.files, state.now, actions) }
+                            else -> item { FilesBlock(ui.files, state.now, actions, deviceId = device.id) }
                         }
                     }
                     TvTab.Tweaks -> {

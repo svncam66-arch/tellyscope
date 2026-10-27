@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- TV Optimizer Pro: original forest-green product background, not the personal IAA seal. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#FF00696B" />
+    <solid android:color="#123C2D" />
 </shape>

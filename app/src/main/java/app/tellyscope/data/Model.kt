@@ -100,6 +100,10 @@ data class Snapshot(
     val netBytesPerSec: Long? = null,
     /** When the TV's software was last updated. */
     val softwareMonth: YearMonth? = null,
+    /** Real measurement flags; 0 from an absent TV reading is NOT a measurement. */
+    val cpuAvailable: Boolean = true,
+    val ramAvailable: Boolean = true,
+    val uptimeAvailable: Boolean = true,
 )
 
 data class AppInfo(
@@ -125,6 +129,11 @@ data class AppInfo(
     val homeService: Boolean = false,
     /** This TV's list says to keep it: Stop, Disable and Uninstall still run, after a warning. */
     val listKeep: Boolean = false,
+    /**
+     * An approved exact-model/firmware recovery procedure exists.
+     * False unless positive evidence was verified; an online ADB connection alone is insufficient.
+     */
+    val verifiedRestorePath: Boolean = false,
 )
 
 data class Socket(val app: String, val remote: String, val state: String)
