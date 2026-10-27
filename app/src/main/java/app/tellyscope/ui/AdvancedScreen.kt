@@ -71,6 +71,7 @@ fun AdvancedScreen(
     back: () -> Unit,
     onExportReport: () -> Unit = {},
     onMeasure: (Boolean) -> Unit = {},
+    onImportProfile: () -> Unit = {},
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val device = state.selected ?: return
@@ -110,6 +111,16 @@ fun AdvancedScreen(
                             KeyValue("Номер сборки", capabilities.buildId ?: "Не определён")
                             KeyValue("Точная прошивка", if (capabilities.exactFirmwareKnown) "Определена, совместимость не проверена" else "Не определена")
                         } ?: KeyValue("Возможности устройства", "Не проверены")
+                        KeyValue("Профиль рекомендаций", ui.signedProfileLabel ?: "Не подтверждён")
+                        Text(
+                            "Цифровая подпись сама по себе не подтверждает безопасность. " +
+                                "Требуется проверка владельцем проекта и точное совпадение прошивки.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(onClick = onImportProfile, enabled = !offline) {
+                            Text("Импорт подписанного профиля")
+                        }
                         listOfNotNull(
                             "IP-адрес" to device.hit.ip,
                             "Порт" to device.hit.port.toString(),
