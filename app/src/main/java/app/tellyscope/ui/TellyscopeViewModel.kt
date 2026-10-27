@@ -23,6 +23,7 @@ import app.tellyscope.data.ConnectResult
 import app.tellyscope.data.Device
 import app.tellyscope.data.DeviceSource
 import app.tellyscope.data.DeviceCapabilities
+import app.tellyscope.data.SignedProfilePolicy
 import app.tellyscope.data.EncryptedLocalBackup
 import app.tellyscope.data.DeviceState
 import app.tellyscope.data.HistoryEntry
@@ -88,6 +89,7 @@ data class ScanUi(
 data class DeviceUi(
     val snapshot: Snapshot? = null,
     val capabilities: DeviceCapabilities? = null,
+    val signedProfileLabel: String? = null,
     val labBefore: PerformanceRun? = null,
     val labAfter: PerformanceRun? = null,
     val labBusy: Boolean = false,
@@ -701,6 +703,60 @@ class TellyscopeViewModel(
     fun cancelLocalBackupRestore() {
         pendingBackupPreview = null
         _state.update { it.copy(backupEntries = emptySet()) }
+    }
+
+    /**
+     * Import two user-picked files, JSON and detached RSA signature. No profile is
+     * trusted unless the owner public key is pinned in this build and exact firmware
+     * identification plus documented physical QA match.
+     */
+    fun importSignedProfile(uris: List<Uri>) {
+        val id = _state.value.selectedId ?: return
+        val storage = this.storage ?: return
+        if (uris.size != 2) {
+            _notice.value = "Выберите ровно два файла: .json и .sig."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val contents = uris.map { uri ->
+                    val file = storage.open(uri)
+                    val limit = if (file.name.endsWith(".json", ignoreCase = true)) 65_536L
+                        else if (file.name.endsWith(".sig", ignoreCase = true)) 1_024L
+                        else throw IllegalArgumentException("Неизвестный формат.")
+                    require(file.size == null || file.size in 1..limit) { "Недопустимый размер файла." }
+                    val buffer = Buffer()
+                    file.source.use { input ->
+                        while (true) {
+                            val n = input.read(buffer, 4096L)
+                            if (n < 0) break
+                            require(buffer.size <= limit) { "Файл превышает допустимый размер." }
+                        }
+                    }
+                    file.name to buffer.readByteArray()
+                }
+                val json = contents.single { it.first.endsWith(".json", ignoreCase = true) }.second
+                val signature = contents.single { it.first.endsWith(".sig", ignoreCase = true) }.second
+                val verdict = source.importVerifiedProfile(id, json, signature)
+                when (verdict) {
+                    is SignedProfilePolicy.Verdict.Accepted -> {
+                        // Refresh package permissions from the verified exact-firmware profile.
+                        val apps = source.apps(id)
+                        updateDevice(id) { it.copy(
+                            signedProfileLabel = "${verdict.profile.id} (rev. ${verdict.profile.revision})",
+                            apps = apps,
+                        ) }
+                        _notice.value = "Подпись владельца и соответствие прошивки проверены."
+                    }
+                    is SignedProfilePolicy.Verdict.Rejected ->
+                        _notice.value = "Профиль не принят: ${verdict.reason}"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _notice.value = "Невозможно импортировать профиль: проверьте оба файла и подпись."
+            }
+        }
     }
 
     /** Saves a local, privacy-aware diagnostic report through Android's document picker. */
