@@ -66,7 +66,7 @@ object SignedProfilePolicy {
         val valid = try {
             val encoded = Base64.getDecoder().decode(pinnedPublicKeyBase64)
             val publicKey = KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(encoded))
-            if ((publicKey as? java.security.interfaces.RSAPublicKey)?.modulus?.bitLength() ?: 0 < 2048) return Verdict.Rejected("Слишком короткий ключ подписи.")
+            if (((publicKey as? java.security.interfaces.RSAPublicKey)?.modulus?.bitLength() ?: 0) < 2048) return Verdict.Rejected("Слишком короткий ключ подписи.")
             Signature.getInstance("SHA256withRSA").apply { initVerify(publicKey); update(jsonBytes) }.verify(signatureBytes)
         } catch (_: Exception) { false }
         if (!valid) return Verdict.Rejected("Цифровая подпись не подтверждена.")
