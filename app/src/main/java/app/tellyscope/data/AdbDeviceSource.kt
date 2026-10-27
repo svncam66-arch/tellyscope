@@ -460,13 +460,14 @@ class AdbDeviceSource(context: Context) : DeviceSource {
     private suspend fun actNow(deviceId: String, action: Action, packageName: String, undoing: Long?): HistoryEntry {
         // Source-level fail-closed preflight: protects other callers, not only Compose UI.
         if (action in setOf(Action.Stop, Action.Disable, Action.Uninstall)) {
-            // Never reuse cached firmware authorization for a system disable.
-            // ADB property reads must succeed at write time before checking a signed profile.
-            if (action == Action.Disable) {
+            var current = apps(deviceId).firstOrNull { it.packageName == packageName }
+            if (action == Action.Disable && current?.system == true) {
+                // Only a SYSTEM package requires an owner-approved exact-firmware
+                // recovery path. User apps can be disabled without a build fingerprint.
                 val now = probeCapabilities(deviceId)
-                require(now.exactFirmwareKnown) { "Прошивка не определена; отключение запрещено." }
+                require(now.exactFirmwareKnown) { "Прошивка не определена; системный пакет не отключён." }
+                current = apps(deviceId).firstOrNull { it.packageName == packageName }
             }
-            val current = apps(deviceId).firstOrNull { it.packageName == packageName }
             PackageActionPolicy.refusal(current, action)?.let { throw IllegalStateException(it) }
         }
         val shell = session(deviceId)
