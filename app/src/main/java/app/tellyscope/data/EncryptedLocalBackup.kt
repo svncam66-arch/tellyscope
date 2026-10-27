@@ -51,24 +51,77 @@ object EncryptedLocalBackup {
     fun restore(filesDir: File, backup: ByteArray, password: CharArray, selected: Set<String>): Set<String> =
         restorePreview(filesDir, preview(backup, password), selected)
 
-    /** Restore from an already authenticated decrypted preview; never from arbitrary untrusted bytes. */
+    /**
+     * Restore selected files using a two-phase transaction. Before replacing a single
+     * live metadata file, stage and back up *all* selected entries in the same directory.
+     * If any replacement fails, restore every changed file in reverse order.
+     *
+     * A crash during a multi-file transaction is not fully covered: see QA release gate.
+     * If automatic rollback fails, the .tvop-rollback copies are intentionally retained.
+     */
     fun restorePreview(filesDir: File, preview: Preview, selected: Set<String>): Set<String> {
         require(filesDir.isDirectory) { "Недоступен каталог приложения." }
         val records = preview.contents
         require(selected.all { it in includedFiles && it in records }) { "Выбран неизвестный раздел архива." }
-        val completed = linkedSetOf<String>()
-        for (name in selected) {
-            val dest = File(filesDir, name)
-            val temp = File.createTempFile(".tvop-recovery-", ".tmp", filesDir)
-            try {
-                temp.writeBytes(records.getValue(name))
-                Files.move(temp.toPath(), dest.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-                completed += name
-            } finally {
-                temp.delete()
+        val names = selected.sorted()
+        // Reject partial/invalid archives before the first file is touched.
+        for (name in names) {
+            val bytes = records.getValue(name)
+            require(bytes.size <= MAX_PER_FILE) { "Превышен размер раздела: $name" }
+            val destination = File(filesDir, name)
+            require(!destination.exists() || (destination.isFile && !Files.isSymbolicLink(destination.toPath()))) {
+                "Текущий раздел недоступен или является ссылкой: $name"
             }
         }
-        return completed
+
+        val staged = linkedMapOf<String, File>()
+        val backups = linkedMapOf<String, File?>()
+        val replaced = mutableListOf<String>()
+        var rollbackFailed = false
+        try {
+            for (name in names) {
+                val stage = File.createTempFile(".tvop-stage-", ".tmp", filesDir)
+                staged[name] = stage
+                stage.writeBytes(records.getValue(name))
+            }
+            // Every pre-existing target is saved before any replacement starts.
+            for (name in names) {
+                val original = File(filesDir, name)
+                backups[name] = if (original.exists()) {
+                    File.createTempFile(".tvop-rollback-", ".bak", filesDir).also {
+                        Files.copy(original.toPath(), it.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+                } else null
+            }
+            for (name in names) {
+                Files.move(
+                    staged.getValue(name).toPath(), File(filesDir, name).toPath(),
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING,
+                )
+                replaced += name
+            }
+            return names.toSet()
+        } catch (failure: Exception) {
+            for (name in replaced.asReversed()) {
+                try {
+                    val original = backups[name]
+                    val target = File(filesDir, name).toPath()
+                    if (original == null) Files.deleteIfExists(target)
+                    else Files.move(original.toPath(), target, StandardCopyOption.REPLACE_EXISTING)
+                } catch (_: Exception) {
+                    rollbackFailed = true
+                }
+            }
+            if (rollbackFailed) throw IOException(
+                "Автоматический откат не завершён. Сохранены файлы .tvop-rollback-*.bak для ручного восстановления.",
+                failure,
+            )
+            throw failure
+        } finally {
+            staged.values.forEach { it.delete() }
+            // Never destroy original backup data when a partial rollback could not finish.
+            if (!rollbackFailed) backups.values.filterNotNull().forEach { it.delete() }
+        }
     }
 
     private fun encode(files: Map<String, ByteArray>): ByteArray {
