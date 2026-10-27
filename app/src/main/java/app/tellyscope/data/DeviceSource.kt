@@ -72,6 +72,9 @@ interface DeviceSource {
     suspend fun importVerifiedProfile(deviceId: String, jsonBytes: ByteArray, signature: ByteArray): SignedProfilePolicy.Verdict =
         SignedProfilePolicy.Verdict.Rejected("Импорт подписанных профилей недоступен.")
 
+    suspend fun rollbackVerifiedProfile(deviceId: String): SignedProfilePolicy.Verdict =
+        SignedProfilePolicy.Verdict.Rejected("Откат проверенных профилей недоступен.")
+
 
 
     /**
